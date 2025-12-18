@@ -1,0 +1,3515 @@
+{
+  "name": "🟡 Workflow 1,2,3,4 combined for whatsapp",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.MediaUrl0}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "f565a8d4-2ffd-46d7-a4a1-8aae3a27db68",
+      "name": "Check if Voice Note",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2592,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.MediaUrl0}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "446810c9-dfec-4612-acf0-a54883822041",
+      "name": "Download Voice Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2368,
+        976
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "MnR0PTJHTVUmu6h7",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('PARSE AI OUTPUT').first().json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "=✅ Order Confirmed! 🎉\n\nOrder ID: {{ $('Log Order').first().json.updates.updatedData.values[0][0] }}\n\n📦 Order Details:\n{{ $('PARSE AI OUTPUT').first().json.order_data.Items }}\n\n💰 Total: Rs. {{ $('PARSE AI OUTPUT').first().json.order_data.Total_Amount }}\n\n📍 Delivery: {{ $('PARSE AI OUTPUT').first().json.order_data.Delivery_Address }}\n\n💳 Payment: {{ $('PARSE AI OUTPUT').first().json.order_data.Payment_Method }}\n\nEstimated delivery: 30-45 mins 🕐\n\nThank you for ordering from {{ $('PARSE AI OUTPUT').first().json.restaurant_name }}! 😊",
+        "options": {}
+      },
+      "id": "6a269c5f-070c-44ed-ba71-922f28c7e775",
+      "name": "Notify Customer (Confirmation)",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2288,
+        472
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "faiqahmedsiddiqui06@gmail.com",
+        "subject": "=🔔 New Order ",
+        "message": "=NEW ORDER RECEIVED!\n\nOreder_ID:{{ $('Log Order').first().json.updates.updatedData.values[0][0] }}\n\nTime: {{ $now.format('D HH:mm') }}\n\nCustomer: {{ $('PARSE AI OUTPUT').first().json.order_data.Customer_Name }}\nPhone: {{ $('PARSE AI OUTPUT').first().json.customer_phone }}\n\nITEMS:\n{{ $('PARSE AI OUTPUT').first().json.order_data.Items }}\n\nTotal: Rs. {{ $('PARSE AI OUTPUT').first().json.order_data.Total_Amount }}\nPayment: {{ $('PARSE AI OUTPUT').first().json.order_data.Payment_Method }}\n\nDelivery Address:\n{{ $('PARSE AI OUTPUT').first().json.order_data.Delivery_Address }}\n\nSpecial Instructions:\n{{ $('PARSE AI OUTPUT').first().json.order_data.Special_Instructions }}\n\n\n✅ *WHEN ORDER IS READY:*\nGo to form put\nOrder ID: {{ $('PARSE AI OUTPUT').first().json.order_data.Order_ID }}\nSet *Kitchen_Order_Status* column to: *Ready*\n\nhttps://chamanho.app.n8n.cloud/form/873a8e34-e1b0-424d-bb65-0423101ec65c",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2064,
+        472
+      ],
+      "id": "7b05b221-3acf-49d0-838f-9986378a4712",
+      "name": "Notify to kitchen",
+      "webhookId": "98ebcad6-a6b3-48c5-a484-1acd6f1e2b61",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "7Ke624onD06RrvEF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-v2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6e52134d-11f9-4ff0-81dd-16fccd99fa00",
+      "name": "Twilio WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -3072,
+        1088
+      ],
+      "webhookId": "whatsapp-incoming",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple deduplication - allows new messages through\nconst messageId = $input.item.json.MessageSid || $input.item.json.body?.MessageSid;\nconst fromNumber = $input.item.json.From || $input.item.json.body?.From;\n\n// Get static data for tracking\nconst processedMessages = $getWorkflowStaticData('global').processedMessages || {};\nconst now = Date.now();\nconst FIVE_MINUTES = 5 * 60 * 1000;\n\n// Clean old entries\nObject.keys(processedMessages).forEach(key => {\n    if (now - processedMessages[key] > FIVE_MINUTES) {\n        delete processedMessages[key];\n    }\n});\n\n// Create unique key\nconst uniqueKey = messageId || `${fromNumber}_${now}`;\n\n// Check if already processed\nif (messageId && processedMessages[messageId]) {\n    console.log(\"DUPLICATE - Blocking\");\n    return []; // Block duplicate\n}\n\n// Mark as processed\nif (messageId) {\n    processedMessages[messageId] = now;\n    $getWorkflowStaticData('global').processedMessages = processedMessages;\n}\n\nconsole.log(\"NEW MESSAGE - Processing\");\n\n// Pass through the data\nreturn {\n    json: {\n        ...$input.item.json,\n        ...$input.item.json.body,\n        From: fromNumber || $input.item.json.body?.From,\n        Body: $input.item.json.Body || $input.item.json.body?.Body,\n        MessageSid: messageId\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2816,
+        1072
+      ],
+      "id": "94e80b29-a0a3-4844-a1c1-94ff245e497a",
+      "name": "deduplication"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================\n// EXTRACT VOICE DATA (Voice Note Path)\n// =====================================================\n// Place after: Transcribe Audio\n// =====================================================\n\n// Get transcription from input\nconst transcribeOutput = $json;\n\n// Extract text from Gemini format: content.parts[0].text\nlet transcribedText = null;\n\nif (transcribeOutput.content &&\n    transcribeOutput.content.parts &&\n    transcribeOutput.content.parts[0]) {\n    transcribedText = transcribeOutput.content.parts[0].text;\n}\n\n// Get webhook data from earlier nodes\nlet body = {};\n\ntry {\n    const checkNode = $('Check if Voice Note').first();\n    if (checkNode && checkNode.json) {\n        body = checkNode.json.body || checkNode.json;\n    }\n} catch (e) {\n    // Try other nodes\n    try {\n        const dedupNode = $('deduplication').first();\n        if (dedupNode && dedupNode.json) {\n            body = dedupNode.json.body || dedupNode.json;\n        }\n    } catch (e2) {\n        body = {};\n    }\n}\n\n// Build structured output\nreturn [{\n    json: {\n        customer_phone: body.From || null,\n        to_number: body.To || null,\n        profile_name: body.ProfileName || null,\n        wa_id: body.WaId || null,\n        customer_message: transcribedText,\n        message_text: transcribedText,\n        message_type: \"audio\",\n        message_sid: body.MessageSid || null,\n        media_url: body.MediaUrl0 || null,\n        is_voice_note: true,\n        was_transcribed: transcribedText ? true : false\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        976
+      ],
+      "id": "08d6e8ae-a1d5-4d24-bfcf-3c225d3df93c",
+      "name": "extract structured data from voice note"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================\n// EXTRACT TEXT DATA (Text Message Path)\n// =====================================================\n// Place after: Check if Voice Note (FALSE path)\n// Purpose: Extract structured data from text messages\n// =====================================================\n\n// Get webhook data\nconst webhookData = $('Check if Voice Note').first()?.json ||\n    $('deduplication').first()?.json ||\n    $('Twilio WhatsApp Webhook').first()?.json ||\n    $json;\n\nconst body = webhookData.body || webhookData;\n\n// Extract all fields in structured format\nconst structuredData = {\n    // Customer contact info\n    customer_phone: body.From || null,\n    to_number: body.To || null,\n    profile_name: body.ProfileName || null,\n    wa_id: body.WaId || null,\n\n    // Message content\n    customer_message: body.Body || null,\n    message_text: body.Body || null,  // Alias\n\n    // Message metadata\n    message_type: \"text\",\n    message_sid: body.MessageSid || body.SmsMessageSid || null,\n\n    // Media info (none for text)\n    media_url: null,\n    is_voice_note: false,\n    was_transcribed: false,\n\n    // Original data for reference\n    account_sid: body.AccountSid || null,\n    api_version: body.ApiVersion || null\n};\n\nreturn [{\n    json: structuredData\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        1168
+      ],
+      "id": "77ff5c66-0d2b-4c30-8595-7bbe5e221e0b",
+      "name": "extract structured data from text"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1696,
+        1072
+      ],
+      "id": "439968e4-a1e6-4c0a-a4a1-0b8f2108c986",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.customer_message }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={\n    \"name\": \"Intent Detection System Prompt\",\n    \"version\": \"4.0\",\n    \"description\": \"Classifies customer messages with SHORT UNIQUE keywords: DONE, XCANCEL, MSAVE, XREPORT\",\n    \"unique_confirmation_keywords\": {\n        \"ORDER\": \"DONE\",\n        \"CANCEL\": \"XCANCEL\",\n        \"MODIFY\": \"MSAVE\",\n        \"COMPLAINT\": \"XREPORT\"\n    },\n    \"system_prompt\": \"You are an intent classifier for a restaurant WhatsApp chatbot.\\n\\nClassify the customer message into ONE of these categories:\\n\\n- ORDER: Customer wants to place NEW order, see menu, confirm order\\n- CHAT: Greetings, general questions, unclear messages\\n- CANCEL: Customer wants to CANCEL their order\\n- COMPLAINT: Customer is unhappy, has a problem, reporting issue\\n- STATUS: Customer wants to know WHERE their order is\\n- MODIFY: Customer wants to CHANGE their existing order\\n\\n═══════════════════════════════════════════════════════════\\n              UNIQUE CONFIRMATION KEYWORDS (EXACT MATCH)\\n═══════════════════════════════════════════════════════════\\n\\nThese are SHORT UNIQUE keywords - route immediately:\\n\\n| Keyword    | Route To   |\\n|------------|------------|\\n| DONE       | ORDER      |\\n| XCANCEL    | CANCEL     |\\n| MSAVE      | MODIFY     |\\n| XREPORT    | COMPLAINT  |\\n\\n═══════════════════════════════════════════════════════════\\n              PRIORITY RULES (Check in this order)\\n═══════════════════════════════════════════════════════════\\n\\n1. EXACT KEYWORDS FIRST (highest priority):\\n   - \\\"DONE\\\" → ORDER\\n   - \\\"XCANCEL\\\" → CANCEL\\n   - \\\"MSAVE\\\" → MODIFY\\n   - \\\"XREPORT\\\" → COMPLAINT\\n\\n2. CANCEL KEYWORDS:\\n   - Contains \\\"cancel\\\" (cancel karo, order cancel) → CANCEL\\n   - Contains \\\"ORD-\\\" (Order ID) → CANCEL\\n   - Is ONLY a single number 1-9 → CANCEL\\n\\n3. COMPLAINT KEYWORDS:\\n   - Contains \\\"problem\\\", \\\"issue\\\", \\\"complaint\\\", \\\"complain\\\" → COMPLAINT\\n   - Contains \\\"wrong\\\", \\\"broken\\\", \\\"bad\\\", \\\"terrible\\\" → COMPLAINT\\n   - Contains \\\"shikayat\\\", \\\"masla\\\", \\\"galti\\\", \\\"kharab\\\" → COMPLAINT\\n   - Contains \\\"refund\\\", \\\"damaged\\\", \\\"spoiled\\\" → COMPLAINT\\n\\n4. MODIFY KEYWORDS:\\n   - Contains \\\"modify\\\", \\\"change\\\", \\\"edit\\\" → MODIFY\\n   - Says \\\"add karo\\\", \\\"hata do\\\" → MODIFY\\n\\n5. STATUS KEYWORDS:\\n   - Asks \\\"kahan hai\\\", \\\"status\\\", \\\"track\\\", \\\"kitna time\\\" → STATUS\\n\\n6. ORDER KEYWORDS:\\n   - Food items + quantities → ORDER\\n   - \\\"order karna hai\\\", \\\"menu dikhao\\\" → ORDER\\n\\n7. GREETINGS:\\n   - \\\"hi\\\", \\\"hello\\\", \\\"salam\\\", \\\"aoa\\\" → CHAT\\n\\n8. DEFAULT:\\n   - If unsure → CHAT\\n\\n═══════════════════════════════════════════════════════════\\n              EXAMPLES\\n═══════════════════════════════════════════════════════════\\n\\n\\\"DONE\\\" → ORDER\\n\\\"XCANCEL\\\" → CANCEL\\n\\\"MSAVE\\\" → MODIFY\\n\\\"XREPORT\\\" → COMPLAINT\\n\\\"cancel my order\\\" → CANCEL\\n\\\"ORD-20251213033614\\\" → CANCEL\\n\\\"2\\\" → CANCEL\\n\\\"2 zinger burger chahiye\\\" → ORDER\\n\\\"order status batao\\\" → STATUS\\n\\\"order mein change karo\\\" → MODIFY\\n\\\"mera order galat hai\\\" → COMPLAINT\\n\\\"there is a problem\\\" → COMPLAINT\\n\\\"shikayat karna hai\\\" → COMPLAINT\\n\\\"food was bad\\\" → COMPLAINT\\n\\\"broken glass in food\\\" → COMPLAINT\\n\\\"hi\\\" → CHAT\\n\\\"menu dikhao\\\" → ORDER\\n\\\"yes\\\" → CHAT\\n\\\"ok\\\" → CHAT\\n\\n═══════════════════════════════════════════════════════════\\n              IMPORTANT NOTES\\n═══════════════════════════════════════════════════════════\\n\\n- Generic \\\"yes\\\", \\\"ok\\\", \\\"confirm\\\", \\\"haan\\\" → CHAT (not specific enough)\\n- ONLY the exact keywords DONE, XCANCEL, MSAVE, XREPORT trigger confirmations\\n- These keywords are SHORT and UNIQUE - cannot be confused\\n- When in doubt, use CHAT\\n\\nOutput ONLY ONE WORD: ORDER, CANCEL, MODIFY, STATUS, COMPLAINT, or CHAT\",\n    \"node_settings\": {\n        \"model\": \"gpt-5\",\n        \"prompt_expression\": \"{{ $json.customer_message || $json.Body }}\",\n        \"temperature\": 0\n    },\n    \"routing_rules\": {\n        \"ORDER\": [\n            \"DONE\",\n            \"order karna hai\",\n            \"menu dikhao\",\n            \"food items + quantities\"\n        ],\n        \"CANCEL\": [\n            \"XCANCEL\",\n            \"cancel\",\n            \"ORD-*\",\n            \"single number 1-9\"\n        ],\n        \"MODIFY\": [\n            \"MSAVE\",\n            \"modify\",\n            \"change\",\n            \"add karo\",\n            \"hata do\"\n        ],\n        \"STATUS\": [\n            \"status\",\n            \"kahan hai\",\n            \"track\",\n            \"kitna time\"\n        ],\n        \"COMPLAINT\": [\n            \"XREPORT\",\n            \"problem\",\n            \"issue\",\n            \"complaint\",\n            \"complain\",\n            \"wrong\",\n            \"broken\",\n            \"bad\",\n            \"terrible\",\n            \"horrible\",\n            \"shikayat\",\n            \"masla\",\n            \"galti\",\n            \"kharab\",\n            \"ghalat\",\n            \"bura\",\n            \"refund\",\n            \"damaged\",\n            \"spoiled\"\n        ],\n        \"CHAT\": [\n            \"hi\",\n            \"hello\",\n            \"salam\",\n            \"aoa\",\n            \"unclear\",\n            \"yes\",\n            \"ok\",\n            \"haan\",\n            \"default\"\n        ]\n    },\n    \"examples\": [\n        {\n            \"input\": \"DONE\",\n            \"output\": \"ORDER\"\n        },\n        {\n            \"input\": \"XCANCEL\",\n            \"output\": \"CANCEL\"\n        },\n        {\n            \"input\": \"MSAVE\",\n            \"output\": \"MODIFY\"\n        },\n        {\n            \"input\": \"XREPORT\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"cancel my order\",\n            \"output\": \"CANCEL\"\n        },\n        {\n            \"input\": \"ORD-20251213033614\",\n            \"output\": \"CANCEL\"\n        },\n        {\n            \"input\": \"2 zinger burger\",\n            \"output\": \"ORDER\"\n        },\n        {\n            \"input\": \"order status batao\",\n            \"output\": \"STATUS\"\n        },\n        {\n            \"input\": \"mera order galat hai\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"i have a problem\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"shikayat karna hai\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"food was cold and bad\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"broken glass in my food\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"masla ho gaya hai\",\n            \"output\": \"COMPLAINT\"\n        },\n        {\n            \"input\": \"hi\",\n            \"output\": \"CHAT\"\n        },\n        {\n            \"input\": \"yes\",\n            \"output\": \"CHAT\"\n        },\n        {\n            \"input\": \"ok\",\n            \"output\": \"CHAT\"\n        },\n        {\n            \"input\": \"haan\",\n            \"output\": \"CHAT\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -1472,
+        1072
+      ],
+      "id": "80da14ec-3519-47bd-a1fa-482234aeaebd",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================\n// PARSE INTENT OUTPUT (After Basic LLM Chain) - FIXED v2\n// =====================================================\n// Extracts intent from AI response + keeps all data\n// =====================================================\n\n// Get AI output\nconst aiOutput = ($json.text || $json.response || $json.output || \"\").toUpperCase().trim();\n\n// Get previous data from Merge node\nlet previousData = {};\ntry {\n    previousData = $('Merge').first()?.json || {};\n} catch (e) {\n    try {\n        previousData = $('extract structured data from text').first()?.json ||\n            $('extract structured data from voice note').first()?.json ||\n            {};\n    } catch (e2) {\n        previousData = {};\n    }\n}\n\n// =====================================================\n// SMART INTENT EXTRACTION (handles verbose AI output)\n// =====================================================\n\nlet finalIntent = 'CHAT'; // Default\nconst validIntents = ['ORDER', 'CANCEL', 'MODIFY', 'STATUS', 'COMPLAINT', 'CHAT'];\n\n// Method 1: Look for the LAST occurrence of a valid intent as a standalone word\n// This handles \"...IS: **CANCEL**\" patterns\nfor (const intent of validIntents) {\n    // Look for intent with ** markers or standalone at end\n    const patterns = [\n        new RegExp(`\\\\*\\\\*${intent}\\\\*\\\\*`, 'g'),           // **CANCEL**\n        new RegExp(`IS[:\\\\s]*\\\\*\\\\*${intent}\\\\*\\\\*`, 'g'),  // IS: **CANCEL**\n        new RegExp(`IS[:\\\\s]*${intent}[\\\\s\\\\*]*$`, 'g'),    // IS: CANCEL or IS CANCEL at end\n        new RegExp(`RESULT[:\\\\s]*\\\\*\\\\*${intent}\\\\*\\\\*`, 'g'), // RESULT: **CANCEL**\n    ];\n\n    for (const pattern of patterns) {\n        if (aiOutput.match(pattern)) {\n            finalIntent = intent;\n            break;\n        }\n    }\n    if (finalIntent !== 'CHAT') break;\n}\n\n// Method 2: If still CHAT, look for Classification/Intent patterns\nif (finalIntent === 'CHAT') {\n    const patterns = [\n        /CLASSIFICATION[:\\s]+\\*{0,2}(ORDER|CANCEL|MODIFY|STATUS|COMPLAINT|CHAT)\\*{0,2}/,\n        /INTENT[:\\s]+\\*{0,2}(ORDER|CANCEL|MODIFY|STATUS|COMPLAINT|CHAT)\\*{0,2}/,\n        /CATEGORY[:\\s]+\\*{0,2}(ORDER|CANCEL|MODIFY|STATUS|COMPLAINT|CHAT)\\*{0,2}/\n    ];\n\n    for (const pattern of patterns) {\n        const match = aiOutput.match(pattern);\n        if (match) {\n            finalIntent = match[1];\n            break;\n        }\n    }\n}\n\n// Method 3: If AI just returned a single word, use it directly\nif (finalIntent === 'CHAT') {\n    const words = aiOutput.split(/\\s+/);\n    if (words.length === 1) {\n        const singleWord = words[0].replace(/[^A-Z]/g, '');\n        if (validIntents.includes(singleWord)) {\n            finalIntent = singleWord;\n        }\n    }\n}\n\n// Method 4: Simple word search - find LAST valid intent word in output\n// This catch-all finds **CANCEL** at the end even with complex formatting\nif (finalIntent === 'CHAT') {\n    // Find all valid intents mentioned\n    const mentionedIntents = [];\n    for (const intent of validIntents) {\n        // Check for **INTENT** pattern (the actual output format)\n        if (aiOutput.includes(`**${intent}**`) || aiOutput.endsWith(intent)) {\n            mentionedIntents.push(intent);\n        }\n    }\n    // Use the last mentioned one (usually the conclusion)\n    if (mentionedIntents.length > 0) {\n        finalIntent = mentionedIntents[mentionedIntents.length - 1];\n    }\n}\n\n// Method 5: Check customer's original message for unique keywords\nconst customerMsg = (previousData.customer_message || previousData.message_text || \"\").toUpperCase().trim();\nif (customerMsg === 'DONE') {\n    finalIntent = 'ORDER';\n} else if (customerMsg === 'XCANCEL') {\n    finalIntent = 'CANCEL';\n} else if (customerMsg === 'MSAVE') {\n    finalIntent = 'MODIFY';\n}\n\n// Method 6: If message contains ORD- pattern, it's CANCEL (order ID)\nif (customerMsg.match(/^ORD-\\d+$/)) {\n    finalIntent = 'CANCEL';\n}\n\n// Return: All previous data + final intent\nreturn [{\n    json: {\n        // Customer data\n        customer_phone: previousData.customer_phone || null,\n        to_number: previousData.to_number || null,\n        customer_message: previousData.customer_message || previousData.message_text || null,\n        message_text: previousData.message_text || previousData.customer_message || null,\n        profile_name: previousData.profile_name || null,\n        wa_id: previousData.wa_id || null,\n        message_type: previousData.message_type || 'text',\n        message_sid: previousData.message_sid || null,\n        is_voice_note: previousData.is_voice_note || false,\n\n        // Intent detection result\n        final_intent: finalIntent,\n        ai_raw_output: aiOutput,\n\n        // Debug\n        detection_method: 'ai_llm'\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        1072
+      ],
+      "id": "79f1ece5-5ff4-474c-a8b7-9e20ca03a4ec",
+      "name": "parse llm intent"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "ORDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "ceec58de-33f3-4928-8cf8-46ddaec5b051"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d19f81a9-2207-40e9-a61d-0224b25cca88",
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "=COMPLAINT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "90707fe4-86ce-4657-a062-aed7e818d18a",
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "=CANCEL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b9b41d34-d076-4c7b-9b2b-adb49b0d9308",
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "MODIFY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a8c1bc77-8342-4053-926b-096e6670565b",
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "STATUS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -896,
+        1008
+      ],
+      "id": "9c7f65d5-590c-4217-9009-d1f916cf42f9",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/System_Config!A1:I2",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -672,
+        784
+      ],
+      "id": "5545d92d-6b61-4a0e-8653-ee22e33862ea",
+      "name": "HTTP Request",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "16f801a7-c8e5-44a3-bee1-4cbf514d6c16",
+              "leftValue": "={{ $json.should_process }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        784
+      ],
+      "id": "6838f884-e564-4711-b259-d286043840b0",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.closed_message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        184,
+        904
+      ],
+      "id": "4169d88c-133f-4563-9648-9c9ce1bf9265",
+      "name": "Send an SMS/MMS/WhatsApp message1",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Menu!A:G",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        184,
+        424
+      ],
+      "id": "8871b926-750d-4476-83d7-3553fd197797",
+      "name": "Read Menu",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Inventory!A:D",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        184,
+        712
+      ],
+      "id": "555d55c5-d627-45d1-829f-132d014b5a0b",
+      "name": "Read Inventory",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// SHOP STATUS CHECK - WITH PASS-THROUGH DATA\n\nconst response = $json;\n\n// Get customer data from node BEFORE Switch\nlet previousData = {};\ntry {\n    // Try Parse Intent Output first (Node 11)\n    previousData = $('Parse Intent Output').first()?.json || {};\n} catch(e) {\n    try {\n        // Fallback to Merge node\n        previousData = $('Merge').first()?.json || {};\n    } catch(e2) {\n        previousData = {};\n    }\n}\n\n// Parse the API response\nlet shopConfig = {};\nconst data = Array.isArray(response) ? response[0] : response;\n\nif (data && data.values && data.values.length >= 2) {\n    const headers = data.values[0];\n    const values = data.values[1];\n    headers.forEach((header, index) => {\n        shopConfig[header] = values[index] || '';\n    });\n}\n\n// ALL values from spreadsheet\nconst restaurantName = shopConfig.Restaurant_Name || '';\nconst kitchenEmail = shopConfig.Kitchen_Email || '';\nconst managerPhone = shopConfig.Manager_Phone || '';\nconst shopStatus = shopConfig.Shop_Status || '';\nconst openingTime = shopConfig.Opening_Time || '';\nconst closingTime = shopConfig.Closing_Time || '';\nconst deliveryFee = parseInt(shopConfig.Delivery_Fee) || 0;\nconst minOrder = parseInt(shopConfig.Min_Order_Amount) || 0;\n\n// Time check\nconst manualOverride = shopStatus.toLowerCase() === 'closed';\nconst now = new Date();\nconst pakistanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));\nconst currentHour = pakistanTime.getHours();\nconst currentMinute = pakistanTime.getMinutes();\n\nfunction parseTime(timeStr) {\n    if (!timeStr) return 0;\n    const cleaned = timeStr.trim().toUpperCase();\n    const parts = cleaned.split(' ');\n    const timePart = parts[0];\n    const period = parts[1] || 'AM';\n    let [hours, minutes] = timePart.split(':').map(Number);\n    minutes = minutes || 0;\n    if (period === 'PM' && hours !== 12) hours += 12;\n    if (period === 'AM' && hours === 12) hours = 0;\n    return hours * 60 + minutes;\n}\n\nconst openMinutes = parseTime(openingTime);\nconst closeMinutes = parseTime(closingTime);\nconst currentMinutes = currentHour * 60 + currentMinute;\n\nlet isOpenByTime = closeMinutes > openMinutes\n    ? (currentMinutes >= openMinutes && currentMinutes < closeMinutes)\n    : (currentMinutes >= openMinutes || currentMinutes < closeMinutes);\n\nconst isOpen = !manualOverride && isOpenByTime;\n\nconst formatTime = (h, m) => {\n    const period = h >= 12 ? 'PM' : 'AM';\n    const hour = h % 12 || 12;\n    return `${hour}:${m.toString().padStart(2, '0')} ${period}`;\n};\n\nconst closedMessage = `Assalam o Alaikum! 😊\n\n${restaurantName} is currently closed. 😔\n\n⏰ Current Time: ${formatTime(currentHour, currentMinute)}\n🕐 Opening: ${openingTime}\n🕚 Closing: ${closingTime}\n\nPlease visit us during business hours! 🍔`;\n\nreturn [{\n    json: {\n        // PASS-THROUGH from Parse Intent Output\n        customer_phone: previousData.customer_phone || '',\n        customer_message: previousData.customer_message || previousData.message_text || '',\n        profile_name: previousData.profile_name || '',\n        to_number: previousData.to_number || '',\n        message_type: previousData.message_type || 'text',\n        final_intent: previousData.final_intent || '',\n        \n        // RESTAURANT CONFIG\n        restaurant_name: restaurantName,\n        kitchen_email: kitchenEmail,\n        manager_phone: managerPhone,\n        sheet_id: \"1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0\",\n        delivery_fee: deliveryFee,\n        min_order: minOrder,\n        opening_time: openingTime,\n        closing_time: closingTime,\n        \n        // SHOP STATUS\n        shop_status_raw: shopStatus,\n        is_open: isOpen,\n        should_process: isOpen,\n        current_time: formatTime(currentHour, currentMinute),\n        closed_message: closedMessage\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        784
+      ],
+      "id": "ced838e0-afca-4526-9b60-81d9ee8596c4",
+      "name": "Shop Status Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PREPARE AI CONTEXT - READS FROM IF NODE\n// Only uses $input.all()\n\nvar customerPhone = '';\nvar customerMessage = '';\nvar toNumber = '';\nvar profileName = 'Customer';\nvar restaurantName = 'Chaman Hotel';\nvar kitchenEmail = '';\nvar managerPhone = '';\nvar sheetId = '';\nvar deliveryFee = 150;\nvar minOrder = 0;\nvar isOpen = true;\nvar finalIntent = '';\n\nvar menuItems = [];\nvar existingOrders = [];\nvar modifiableOrders = [];\n\n// ============ GET DATA FROM INPUT ============\nvar inputItems = $input.all();\n\nfor (var i = 0; i < inputItems.length; i++) {\n    var item = inputItems[i].json;\n    if (!item) continue;\n\n    // Get customer data\n    if (item.customer_phone) {\n        customerPhone = item.customer_phone || '';\n    }\n    if (item.customer_message) {\n        customerMessage = item.customer_message || '';\n    }\n    if (item.profile_name) {\n        profileName = item.profile_name || 'Customer';\n    }\n    if (item.to_number) {\n        toNumber = item.to_number || '';\n    }\n    if (item.final_intent) {\n        finalIntent = item.final_intent || '';\n    }\n\n    // Get restaurant config\n    if (item.restaurant_name) {\n        restaurantName = item.restaurant_name || 'Chaman Hotel';\n    }\n    if (item.kitchen_email) {\n        kitchenEmail = item.kitchen_email || '';\n    }\n    if (item.manager_phone) {\n        managerPhone = item.manager_phone || '';\n    }\n    if (item.sheet_id) {\n        sheetId = item.sheet_id || '';\n    }\n    if (item.delivery_fee) {\n        deliveryFee = parseInt(item.delivery_fee) || 150;\n    }\n    if (item.min_order) {\n        minOrder = parseInt(item.min_order) || 0;\n    }\n    if (item.is_open !== undefined) {\n        isOpen = item.is_open;\n    }\n\n    // Check for menu data (has values array with Item_Name)\n    if (item.values && item.values.length > 1) {\n        var headers = item.values[0];\n        var headerStr = headers.join(',').toLowerCase();\n\n        // Menu data\n        if (headerStr.indexOf('item_name') >= 0 || headerStr.indexOf('price') >= 0) {\n            var nameIdx = -1;\n            var priceIdx = -1;\n            var catIdx = -1;\n            var availIdx = -1;\n\n            for (var h = 0; h < headers.length; h++) {\n                var hdr = String(headers[h]).toLowerCase();\n                if (hdr === 'item_name') nameIdx = h;\n                if (hdr === 'price') priceIdx = h;\n                if (hdr === 'category') catIdx = h;\n                if (hdr === 'available') availIdx = h;\n            }\n\n            if (nameIdx >= 0 && menuItems.length === 0) {\n                for (var m = 1; m < item.values.length; m++) {\n                    var mrow = item.values[m];\n                    var mname = mrow[nameIdx] || '';\n                    var mprice = priceIdx >= 0 ? mrow[priceIdx] : 0;\n                    var mcat = catIdx >= 0 ? mrow[catIdx] : '';\n                    var mavail = availIdx >= 0 ? String(mrow[availIdx]).toLowerCase() : 'yes';\n\n                    if (mname && mavail !== 'no' && mavail !== 'false') {\n                        menuItems.push({ name: mname, price: parseInt(mprice) || 0, category: mcat });\n                    }\n                }\n            }\n        }\n\n        // Orders data\n        if (headerStr.indexOf('order_id') >= 0) {\n            var oIdIdx = -1;\n            var oPhoneIdx = -1;\n            var oStatusIdx = -1;\n            var oItemsIdx = -1;\n            var oTotalIdx = -1;\n            var oAddrIdx = -1;\n            var oPayIdx = -1;\n\n            for (var oh = 0; oh < headers.length; oh++) {\n                var ohdr = String(headers[oh]).toLowerCase();\n                if (ohdr === 'order_id') oIdIdx = oh;\n                if (ohdr === 'customer_phone') oPhoneIdx = oh;\n                if (ohdr === 'status') oStatusIdx = oh;\n                if (ohdr === 'items') oItemsIdx = oh;\n                if (ohdr === 'total_amount') oTotalIdx = oh;\n                if (ohdr === 'delivery_address') oAddrIdx = oh;\n                if (ohdr === 'payment_method') oPayIdx = oh;\n            }\n\n            var cleanPhone = customerPhone.replace('whatsapp:', '').replace('+', '').slice(-10);\n\n            if (oIdIdx >= 0 && existingOrders.length === 0) {\n                for (var o = 1; o < item.values.length; o++) {\n                    var orow = item.values[o];\n                    var rowPhone = oPhoneIdx >= 0 ? String(orow[oPhoneIdx]).replace('whatsapp:', '').replace('+', '').slice(-10) : '';\n\n                    if (cleanPhone.length >= 10 && rowPhone === cleanPhone) {\n                        var order = {\n                            row_number: o + 1,\n                            order_id: oIdIdx >= 0 ? orow[oIdIdx] : '',\n                            status: oStatusIdx >= 0 ? orow[oStatusIdx] : '',\n                            items: oItemsIdx >= 0 ? orow[oItemsIdx] : '',\n                            total: oTotalIdx >= 0 ? orow[oTotalIdx] : '',\n                            address: oAddrIdx >= 0 ? orow[oAddrIdx] : '',\n                            payment: oPayIdx >= 0 ? orow[oPayIdx] : ''\n                        };\n                        existingOrders.push(order);\n\n                        var modStatuses = ['booked', 'processing', 'pending', 'confirmed', 'preparing', 'new', 'received'];\n                        if (modStatuses.indexOf(String(order.status).toLowerCase()) >= 0) {\n                            modifiableOrders.push(order);\n                        }\n                    }\n                }\n            }\n        }\n    }\n}\n\n// Clean phone\ncustomerPhone = customerPhone.replace('whatsapp:', '');\n\n// Build menu text\nvar menuText = '=== MENU ===\\n';\nif (menuItems.length > 0) {\n    for (var mi = 0; mi < menuItems.length; mi++) {\n        menuText = menuText + '- ' + menuItems[mi].name + ': Rs.' + menuItems[mi].price + '\\n';\n    }\n} else {\n    menuText = '=== MENU NOT LOADED ===\\n';\n}\n\n// Build orders text\nvar ordersText = '';\nif (modifiableOrders.length > 0) {\n    ordersText = '\\n=== YOUR ORDERS ===\\n';\n    for (var oi = 0; oi < modifiableOrders.length; oi++) {\n        var ord = modifiableOrders[oi];\n        ordersText = ordersText + (oi + 1) + '. ' + ord.order_id + ': ' + ord.items + ' - Rs.' + ord.total + '\\n';\n    }\n} else {\n    ordersText = '\\n=== NO ORDERS ===\\n';\n}\n\n// Build context\nvar fullContext = '=== RESTAURANT ===\\n' + restaurantName + '\\n' +\n    'Delivery: Rs.' + deliveryFee + ' | Min Order: Rs.' + minOrder + '\\n' +\n    'Status: ' + (isOpen ? 'OPEN' : 'CLOSED') + '\\n' +\n    'Customer: ' + profileName + ' (' + customerPhone + ')\\n\\n' +\n    menuText + ordersText + '\\n' +\n    '=== MESSAGE ===\\n\"' + customerMessage + '\"';\n\n// Return\nreturn [{\n    json: {\n        ai_context: fullContext,\n        customer_message: customerMessage,\n        customer_phone: customerPhone,\n        profile_name: profileName,\n        to_number: toNumber,\n        final_intent: finalIntent,\n        restaurant_name: restaurantName,\n        kitchen_email: kitchenEmail,\n        manager_phone: managerPhone,\n        sheet_id: sheetId,\n        delivery_fee: deliveryFee,\n        min_order: minOrder,\n        is_open: isOpen,\n        menu_items: menuItems,\n        existing_orders: existingOrders,\n        modifiable_orders: modifiableOrders,\n        has_modifiable_orders: modifiableOrders.length > 0,\n        modifiable_order_count: modifiableOrders.length\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        640
+      ],
+      "id": "f084509f-0fbd-4398-ae6d-ddb0c1e21fb3",
+      "name": "Prepare AI Context"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.customer_phone }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1176,
+        864
+      ],
+      "id": "59bde085-705e-408c-b7da-e0750d64c373",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.ai_context }}",
+        "options": {
+          "systemMessage": "={\n    \"name\": \"Full AI Agent System Prompt (ORDER + MODIFY)\",\n    \"version\": \"5.0\",\n    \"description\": \"Handles orders and modifications with SHORT UNIQUE keywords: DONE (order), MSAVE (modify). Does NOT confuse intent detection.\",\n    \"unique_confirmation_keywords\": {\n        \"ORDER\": \"DONE\",\n        \"MODIFY\": \"MSAVE\"\n    },\n    \"system_prompt\": \"You are a friendly restaurant assistant for {{ $json.restaurant_name }}.\\n\\n=== LANGUAGE RULE ===\\nDETECT customer's language and MATCH it:\\n- If customer writes in ENGLISH → Reply in ENGLISH\\n- If customer writes in ROMAN URDU → Reply in ROMAN URDU\\n- Always use emojis 😊🍔\\n\\n=== YOUR TWO JOBS ===\\n1. TAKE NEW ORDERS - Help customers order food\\n2. MODIFY EXISTING ORDERS - Help customers change their orders\\n\\n=== CRITICAL MESSAGE RULES ===\\nYour messages must NOT confuse the intent detection system.\\n\\nNEVER use these words in your messages:\\n❌ CANCEL, XCANCEL (these are CANCEL path keywords)\\n❌ STATUS, TRACK, KAHAN HAI (these are STATUS path keywords)\\n❌ PROBLEM, ISSUE, GALTI (these are COMPLAINT keywords)\\n❌ Generic yes/no questions\\n\\nFor ORDER confirmation → ONLY ask for \\\"DONE\\\"\\nFor MODIFY confirmation → ONLY ask for \\\"MSAVE\\\"\\n\\n=== DETECT WHAT CUSTOMER WANTS ===\\n\\n🚨 CRITICAL RULE:\\nWhen customer mentions food items → ALWAYS treat as NEW ORDER\\n→ NEVER ask about existing orders unless customer says MODIFY\\n\\nNEW ORDER if:\\n- Food items mentioned (burger, biryani, pizza)\\n- \\\"order karna hai\\\", \\\"menu dikhao\\\"\\n- Customer has no existing orders\\n\\nMODIFY if:\\n- \\\"modify\\\", \\\"change\\\", \\\"add karo\\\", \\\"hata do\\\"\\n- Refers to existing order\\n\\n=== NEW ORDER FLOW ===\\n\\nStep 1: Greet, show menu\\n\\nENGLISH:\\n\\\"Welcome to {{ $json.restaurant_name }}! 😊\\nMenu:\\n🍔 Zinger Burger - Rs. 450\\n🍗 Chicken Tikka - Rs. 650\\n🍚 Biryani - Rs. 550\\n\\nWhat would you like?\\\"\\n\\nROMAN URDU:\\n\\\"{{ $json.restaurant_name }} mein khush aamdeed! 😊\\nMenu:\\n🍔 Zinger Burger - Rs. 450\\n🍗 Chicken Tikka - Rs. 650\\n🍚 Biryani - Rs. 550\\n\\nKya lena hai?\\\"\\n\\nStep 2: Take items + quantities\\n\\nStep 3: Ask delivery address\\nENGLISH: \\\"Delivery address?\\\"\\nROMAN URDU: \\\"Delivery ka address?\\\"\\n\\nStep 4: Ask payment\\nENGLISH: \\\"Payment: Cash or Online?\\\"\\nROMAN URDU: \\\"Payment: Cash ya Online?\\\"\\n\\nStep 5: Ask special instructions\\nENGLISH: \\\"Any special instructions?\\\"\\nROMAN URDU: \\\"Koi special instructions?\\\"\\n\\nStep 6: Show summary\\nENGLISH:\\n\\\"📋 SUMMARY:\\n🍔 [items]\\n🚚 Delivery = Rs. {{ $json.delivery_fee }}\\n💰 Total = Rs. [total]\\n📍 [address]\\n💳 [payment]\\n\\n✅ To place, type: DONE\\\"\\n\\nROMAN URDU:\\n\\\"📋 SUMMARY:\\n🍔 [items]\\n🚚 Delivery = Rs. {{ $json.delivery_fee }}\\n💰 Total = Rs. [total]\\n📍 [address]\\n💳 [payment]\\n\\n✅ Confirm ke liye type karein: DONE\\\"\\n\\n⚠️ ONLY ask for \\\"DONE\\\" - nothing else!\\n\\nStep 7: When customer types \\\"DONE\\\"\\nENGLISH: \\\"Placed! 🎉 You will receive updates.\\\"\\nROMAN URDU: \\\"Hogaya! 🎉 Updates milte rahenge.\\\"\\n\\nThen add at END:\\n[[NEW_ORDER]]\\nCustomer_Name: [name from context or 'Customer']\\nItems: [all items with quantities]\\nTotal_Amount: [total]\\nDelivery_Address: [address]\\nPayment_Method: [cash/online]\\nSpecial_Instructions: [instructions or 'None']\\n[[/NEW_ORDER]]\\n\\n=== IF CUSTOMER TYPES WRONG FOR ORDER ===\\nIf customer types anything except \\\"DONE\\\":\\nENGLISH: \\\"Type exactly: DONE\\\"\\nROMAN URDU: \\\"Exact likhein: DONE\\\"\\n\\n=== MODIFY ORDER FLOW ===\\n\\nStep 1: Show existing order\\nENGLISH:\\n\\\"📋 YOUR ORDER:\\n🆔 ID: [order_id]\\n🍔 [items]\\n💰 Rs. [total]\\n\\nWhat to change?\\n1️⃣ Add items\\n2️⃣ Remove items\\n3️⃣ Address\\n4️⃣ Payment\\\"\\n\\nROMAN URDU:\\n\\\"📋 AAPKA ORDER:\\n🆔 ID: [order_id]\\n🍔 [items]\\n💰 Rs. [total]\\n\\nKya change karna hai?\\n1️⃣ Items add\\n2️⃣ Items remove\\n3️⃣ Address\\n4️⃣ Payment\\\"\\n\\nStep 2: Make changes, calculate new total\\n\\nStep 3: Show updated summary\\nENGLISH:\\n\\\"📋 UPDATED:\\n🍔 [new items]\\n🚚 Delivery = Rs. {{ $json.delivery_fee }}\\n💰 New Total = Rs. [new total]\\n\\n✏️ To save, type: MSAVE\\\"\\n\\nROMAN URDU:\\n\\\"📋 UPDATED:\\n🍔 [new items]\\n🚚 Delivery = Rs. {{ $json.delivery_fee }}\\n💰 New Total = Rs. [new total]\\n\\n✏️ Save ke liye type karein: MSAVE\\\"\\n\\n⚠️ ONLY ask for \\\"MSAVE\\\" - nothing else!\\n\\nStep 4: When customer types \\\"MSAVE\\\"\\nENGLISH: \\\"Saved! ✅\\\"\\nROMAN URDU: \\\"Save hogaya! ✅\\\"\\n\\nThen add at END:\\n[[MODIFY_ORDER]]\\nOrder_ID: [existing order id like ORD-20251214060029]\\nNew_Items: [updated items]\\nNew_Total: [new total]\\nNew_Address: [address]\\nNew_Payment: [payment]\\nNew_Instructions: [instructions]\\n[[/MODIFY_ORDER]]\\n\\n=== IF CUSTOMER TYPES WRONG FOR MODIFY ===\\nIf customer types anything except \\\"MSAVE\\\":\\nENGLISH: \\\"Type exactly: MSAVE\\\"\\nROMAN URDU: \\\"Exact likhein: MSAVE\\\"\\n\\n=== IF NO ORDERS TO MODIFY ===\\nENGLISH: \\\"No orders to modify. Want to place new? Share items! 🍔\\\"\\nROMAN URDU: \\\"Koi order nahi hai. Naya order dein? Items batayein! 🍔\\\"\\n\\n=== CALCULATION RULES ===\\nNEW: Items + Delivery = Total\\nMODIFY: Original + New Items + Delivery = New Total\\n\\n=== IMPORTANT RULES ===\\n1. For NEW ORDER → only ask for \\\"DONE\\\"\\n2. For MODIFY → only ask for \\\"MSAVE\\\"\\n3. NEVER use: cancel, XCANCEL, status, track, kahan hai\\n4. NEVER ask yes/no questions\\n5. MATCH customer's language\\n6. Keep messages SHORT and clear\",\n    \"context_variable\": \"{{ $json.ai_context }}\",\n    \"memory_settings\": {\n        \"type\": \"Simple Memory\",\n        \"context_window\": 10\n    },\n    \"output_markers\": {\n        \"new_order\": \"[[NEW_ORDER]]...[[/NEW_ORDER]]\",\n        \"modify_order\": \"[[MODIFY_ORDER]]...[[/MODIFY_ORDER]]\"\n    },\n    \"forbidden_words\": [\n        \"cancel\",\n        \"XCANCEL\",\n        \"status\",\n        \"track\",\n        \"kahan hai\",\n        \"kitna time\",\n        \"problem\",\n        \"issue\",\n        \"galti\",\n        \"wrong\",\n        \"yes\",\n        \"ok\",\n        \"haan\",\n        \"confirm\"\n    ],\n    \"only_use_keywords\": {\n        \"order_confirmation\": \"DONE\",\n        \"modify_confirmation\": \"MSAVE\"\n    },\n    \"example_conversations\": {\n        \"new_order_english\": [\n            {\n                \"role\": \"customer\",\n                \"message\": \"I want 2 zinger burger\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Great! 2 Zinger Burger 🍔\\n\\nDelivery address?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"123 Main St, Karachi\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Payment: Cash or Online?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"Cash\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Any special instructions?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"Extra spicy\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"📋 SUMMARY:\\n🍔 Zinger Burger x 2 = Rs. 900\\n🚚 Delivery = Rs. 150\\n💰 Total = Rs. 1050\\n📍 123 Main St, Karachi\\n💳 Cash\\n📝 Extra spicy\\n\\n✅ To place, type: DONE\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"DONE\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Placed! 🎉 You will receive updates.\\n\\n[[NEW_ORDER]]\\nCustomer_Name: Customer\\nItems: Zinger Burger x 2\\nTotal_Amount: 1050\\nDelivery_Address: 123 Main St, Karachi\\nPayment_Method: Cash\\nSpecial_Instructions: Extra spicy\\n[[/NEW_ORDER]]\"\n            }\n        ],\n        \"new_order_roman_urdu\": [\n            {\n                \"role\": \"customer\",\n                \"message\": \"2 zinger burger chahiye\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Zaroor! 2 Zinger Burger 🍔\\n\\nDelivery ka address?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"Nazimabad, Karachi\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Payment: Cash ya Online?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"Cash\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Koi special instructions?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"Nahi\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"📋 SUMMARY:\\n🍔 Zinger Burger x 2 = Rs. 900\\n🚚 Delivery = Rs. 150\\n💰 Total = Rs. 1050\\n📍 Nazimabad, Karachi\\n💳 Cash\\n\\n✅ Confirm ke liye type karein: DONE\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"DONE\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Hogaya! 🎉 Updates milte rahenge.\\n\\n[[NEW_ORDER]]\\nCustomer_Name: Customer\\nItems: Zinger Burger x 2\\nTotal_Amount: 1050\\nDelivery_Address: Nazimabad, Karachi\\nPayment_Method: Cash\\nSpecial_Instructions: None\\n[[/NEW_ORDER]]\"\n            }\n        ],\n        \"modify_order\": [\n            {\n                \"role\": \"customer\",\n                \"message\": \"Order mein change karna hai\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"📋 AAPKA ORDER:\\n🆔 ID: ORD-20251214060029\\n🍔 Zinger x 2 = Rs. 900\\n\\nKya change karna hai?\\n1️⃣ Items add\\n2️⃣ Items remove\\n3️⃣ Address\\n4️⃣ Payment\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"1 Coke add karo\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"📋 UPDATED:\\n🍔 Zinger x 2 = Rs. 900\\n🥤 Coke x 1 = Rs. 100\\n🚚 Delivery = Rs. 150\\n💰 New Total = Rs. 1150\\n\\n✏️ Save ke liye type karein: MSAVE\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"MSAVE\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Save hogaya! ✅\\n\\n[[MODIFY_ORDER]]\\nOrder_ID: ORD-20251214060029\\nNew_Items: Zinger Burger x 2, Coke x 1\\nNew_Total: 1150\\nNew_Address: Nazimabad, Karachi\\nNew_Payment: Cash\\nNew_Instructions: None\\n[[/MODIFY_ORDER]]\"\n            }\n        ]\n    }\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1040,
+        640
+      ],
+      "id": "5daae051-f9f9-47db-97bd-61505dfa196f",
+      "name": "Full AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PARSE AI OUTPUT - HANDLES NEW ORDER + MODIFY\n\nconst aiOutput = $json.output || $json.text || '';\nconst previousData = $('Prepare AI Context').first()?.json || {};\n\n// Initialize result\nlet result = {\n    output: aiOutput,\n\n    // Order flags\n    has_order: false,\n    is_new_order: false,\n    is_modify: false,\n\n    // Order data (for new orders)\n    order_data: null,\n\n    // Modify data\n    modify_data: null,\n    order_id_to_modify: null,\n    order_row_number: null,\n\n    // Pass through data\n    customer_phone: previousData.customer_phone || '',\n    profile_name: previousData.profile_name || '',\n    to_number: previousData.to_number || '',\n    restaurant_name: previousData.restaurant_name || '',\n    kitchen_email: previousData.kitchen_email || '',\n    manager_phone: previousData.manager_phone || '',\n    sheet_id: previousData.sheet_id || '',\n    delivery_fee: previousData.delivery_fee || 150,\n    modifiable_orders: previousData.modifiable_orders || []\n};\n\n// ============ CHECK FOR NEW ORDER ============\nconst newOrderMatch = aiOutput.match(/\\[\\[NEW_ORDER\\]\\]([\\s\\S]*?)\\[\\[\\/NEW_ORDER\\]\\]/i);\n\nif (newOrderMatch) {\n    result.has_order = true;\n    result.is_new_order = true;\n\n    const orderContent = newOrderMatch[1];\n\n    // Parse order fields\n    const customerNameMatch = orderContent.match(/Customer_Name:\\s*(.+)/i);\n    const itemsMatch = orderContent.match(/Items:\\s*(.+)/i);\n    const totalMatch = orderContent.match(/Total_Amount:\\s*(.+)/i);\n    const addressMatch = orderContent.match(/Delivery_Address:\\s*(.+)/i);\n    const paymentMatch = orderContent.match(/Payment_Method:\\s*(.+)/i);\n    const instructionsMatch = orderContent.match(/Special_Instructions:\\s*(.+)/i);\n\n    result.order_data = {\n        Customer_Name: customerNameMatch ? customerNameMatch[1].trim() : result.profile_name,\n        Items: itemsMatch ? itemsMatch[1].trim() : '',\n        Total_Amount: totalMatch ? totalMatch[1].trim().replace(/[^0-9]/g, '') : '',\n        Delivery_Address: addressMatch ? addressMatch[1].trim() : '',\n        Payment_Method: paymentMatch ? paymentMatch[1].trim() : 'Cash on Delivery',\n        Special_Instructions: instructionsMatch ? instructionsMatch[1].trim() : 'none'\n    };\n\n    // Clean output - remove marker\n    result.output = aiOutput.replace(/\\[\\[NEW_ORDER\\]\\][\\s\\S]*?\\[\\[\\/NEW_ORDER\\]\\]/gi, '').trim();\n}\n\n// ============ CHECK FOR MODIFY ORDER ============\nconst modifyMatch = aiOutput.match(/\\[\\[MODIFY_ORDER\\]\\]([\\s\\S]*?)\\[\\[\\/MODIFY_ORDER\\]\\]/i);\n\nif (modifyMatch) {\n    result.has_order = true;\n    result.is_modify = true;\n\n    const modifyContent = modifyMatch[1];\n\n    // Parse modify fields\n    const orderIdMatch = modifyContent.match(/Order_ID:\\s*(.+)/i);\n    const newItemsMatch = modifyContent.match(/New_Items:\\s*(.+)/i);\n    const newTotalMatch = modifyContent.match(/New_Total:\\s*(.+)/i);\n    const newAddressMatch = modifyContent.match(/New_Address:\\s*(.+)/i);\n    const newPaymentMatch = modifyContent.match(/New_Payment:\\s*(.+)/i);\n    const newInstructionsMatch = modifyContent.match(/New_Instructions:\\s*(.+)/i);\n\n    const orderId = orderIdMatch ? orderIdMatch[1].trim() : '';\n\n    result.modify_data = {\n        Order_ID: orderId,\n        New_Items: newItemsMatch ? newItemsMatch[1].trim() : '',\n        New_Total: newTotalMatch ? newTotalMatch[1].trim().replace(/[^0-9]/g, '') : '',\n        New_Address: newAddressMatch ? newAddressMatch[1].trim() : '',\n        New_Payment: newPaymentMatch ? newPaymentMatch[1].trim() : '',\n        New_Instructions: newInstructionsMatch ? newInstructionsMatch[1].trim() : ''\n    };\n\n    result.order_id_to_modify = orderId;\n\n    // Find the row number for this order\n    if (result.modifiable_orders && result.modifiable_orders.length > 0) {\n        const orderToModify = result.modifiable_orders.find(o =>\n            o.order_id.toUpperCase() === orderId.toUpperCase()\n        );\n        if (orderToModify) {\n            result.order_row_number = orderToModify.row_number;\n        }\n    }\n\n    // Clean output - remove marker\n    result.output = aiOutput.replace(/\\[\\[MODIFY_ORDER\\]\\][\\s\\S]*?\\[\\[\\/MODIFY_ORDER\\]\\]/gi, '').trim();\n}\n\n// Final intent determination\nif (result.is_new_order) {\n    result.final_intent = 'NEW_ORDER';\n} else if (result.is_modify) {\n    result.final_intent = 'MODIFY_ORDER';\n} else {\n    result.final_intent = 'CHAT';\n}\n\nreturn [{ json: result }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1392,
+        640
+      ],
+      "id": "af6c8e3e-3fed-4628-9d2b-c7224f56ad1c",
+      "name": "PARSE AI OUTPUT"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Orders!A:J:append?valueInputOption=USER_ENTERED&includeValuesInResponse=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"values\": [\n    [\n      \"ORD-{{ $now.format('yyyyMMddHHmmss') }}\",\n      \"{{ $json.order_data.Customer_Name }}\",\n      \"{{ $json.customer_phone }}\",\n      \"{{ $json.order_data.Items }}\",\n      \"{{ $json.order_data.Total_Amount }}\",\n      \"{{ $json.order_data.Delivery_Address }}\",\n      \"{{ $json.order_data.Payment_Method }}\",\n      \"Booked\",\n      \"{{ $now.format('dd MMM yyyy, hh:mm a') }}\",\n      \"{{ $json.order_data.Special_Instructions }}\"\n    ]\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1840,
+        472
+      ],
+      "id": "8c2ff9ad-ada2-4afc-a453-f5e76deb9a18",
+      "name": "Log Order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "=+14155238886",
+        "to": "={{ $json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        856
+      ],
+      "id": "c3db0bbd-028a-4c77-8100-72722b2bf7a6",
+      "name": "Simple Reply",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Orders!A:J",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -448,
+        104
+      ],
+      "id": "f0ec232e-3355-4a02-9f16-34564670c7bb",
+      "name": "Find Customer Orders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// PREPARE CANCEL CONTEXT - UPDATED\n\nconst ordersResponse = $json;\n\n// Get customer data from Switch node\nlet customerPhone = '';\nlet customerMessage = '';\nlet toNumber = '';\nlet restaurantName = 'Chaman Hotel';\nlet kitchenEmail = '';\n\ntry {\n    const switchData = $('Switch1').first()?.json || {};\n    customerPhone = switchData.customer_phone || '';\n    customerMessage = switchData.customer_message || switchData.message_text || '';\n    toNumber = switchData.to_number || '';\n} catch (e) { }\n\n// Get config\ntry {\n    const configData = $('Cancel - Read Config').first()?.json || {};\n    if (configData.values) {\n        const headers = configData.values[0];\n        const values = configData.values[1];\n        const nameIdx = headers.indexOf('Restaurant_Name');\n        const emailIdx = headers.indexOf('Kitchen_Email');\n        restaurantName = values[nameIdx] || 'Chaman Hotel';\n        kitchenEmail = values[emailIdx] || '';\n    }\n} catch (e) { }\n\n// Get today's date info\nconst now = new Date();\nconst day = now.getDate();\nconst month = now.getMonth();\nconst year = now.getFullYear();\nconst months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];\nconst monthName = months[month];\nconst todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;\n\n// Parse orders\nlet customerOrders = [];\nconst data = Array.isArray(ordersResponse) ? ordersResponse[0] : ordersResponse;\n\nif (data && data.values && data.values.length > 1) {\n    const headers = data.values[0];\n    const rows = data.values.slice(1);\n\n    const phoneIdx = headers.indexOf('Customer_Phone');\n    const orderIdIdx = headers.indexOf('Order_ID');\n    const statusIdx = headers.indexOf('Status');\n    const itemsIdx = headers.indexOf('Items');\n    const totalIdx = headers.indexOf('Total_Amount');\n    const timeIdx = headers.indexOf('Order_Time');\n\n    const cleanPhone = customerPhone.replace('whatsapp:', '').replace('+', '').slice(-10);\n\n    rows.forEach((row, index) => {\n        const rowPhone = (row[phoneIdx] || '').replace('whatsapp:', '').replace('+', '').slice(-10);\n\n        // Check phone match\n        const phoneMatch = rowPhone === cleanPhone && cleanPhone.length > 0;\n\n        // Match by phone only (removed date check for flexibility)\n        if (phoneMatch) {\n            customerOrders.push({\n                row_number: index + 2,\n                order_id: row[orderIdIdx] || `ROW-${index + 2}`,\n                status: row[statusIdx] || '',\n                items: row[itemsIdx] || '',\n                total: row[totalIdx] || '',\n                order_time: row[timeIdx] || ''\n            });\n        }\n    });\n}\n\n// ================================\n// CANCELLABLE STATUSES - UPDATED\n// ================================\nconst cancellableStatuses = [\n    'booked',\n    'processing',\n    'pending',\n    'confirmed',\n    'preparing',\n    'new',\n    'received',\n    'ready',\n    'modified'    // ADDED: Modified orders can be cancelled\n];\n\n// Filter orders that can be cancelled\n// Exclude already cancelled or delivered orders\nconst nonCancellableStatuses = ['cancelled', 'delivered', 'completed', 'out for delivery'];\n\nconst cancellableOrders = customerOrders.filter(order => {\n    const status = order.status.toLowerCase();\n    // Include if status is in cancellable list AND not in non-cancellable list\n    return cancellableStatuses.includes(status) && !nonCancellableStatuses.includes(status);\n});\n\n// Build context for AI\nlet ordersText = '';\nif (cancellableOrders.length === 0) {\n    if (customerOrders.length === 0) {\n        ordersText = 'NO ORDERS FOUND for this customer phone number.';\n    } else {\n        ordersText = 'NO CANCELLABLE ORDERS. Orders are already delivered or cancelled.';\n    }\n} else {\n    ordersText = 'CANCELLABLE ORDERS:\\n';\n    cancellableOrders.forEach((order, i) => {\n        ordersText += `${i + 1}. Order ID: ${order.order_id}\n   Items: ${order.items}\n   Total: Rs. ${order.total}\n   Status: ${order.status}\n   Time: ${order.order_time}\\n\\n`;\n    });\n}\n\nconst context = `\n=== CANCEL REQUEST ===\nRestaurant: ${restaurantName}\nCustomer Phone: ${customerPhone}\n\n${ordersText}\n\n=== CUSTOMER MESSAGE ===\n\"${customerMessage}\"\n\n=== CONFIRMATION KEYWORD ===\nTo cancel, customer must type: XCANCEL\n`;\n\nreturn [{\n    json: {\n        customer_phone: customerPhone,\n        customer_message: customerMessage,\n        to_number: toNumber,\n        restaurant_name: restaurantName,\n        kitchen_email: kitchenEmail,\n\n        cancel_context: context,\n        cancellable_orders: cancellableOrders,\n        has_cancellable_orders: cancellableOrders.length > 0,\n        order_count: cancellableOrders.length,\n        today: todayStr\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        104
+      ],
+      "id": "fcd15d79-6def-4336-9ec8-9d44590ce8c6",
+      "name": "PREPARE CANCEL CONTEXT"
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/System_Config!A1:I1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -672,
+        104
+      ],
+      "id": "7176c5f0-e266-4d04-becc-ddf202a0c8b0",
+      "name": "Cancel - Read Config",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.cancel_context }}",
+        "options": {
+          "systemMessage": "={\n    \"name\": \"Cancel AI Agent System Prompt\",\n    \"version\": \"6.0\",\n    \"description\": \"Handles order cancellations - NO reason question to avoid hallucination\",\n    \"unique_confirmation_keyword\": \"XCANCEL\",\n    \"system_prompt\": \"You are a friendly restaurant assistant for handling CANCELLATIONS ONLY.\\n\\n=== LANGUAGE RULE ===\\nDETECT customer's language and MATCH it:\\n- If customer writes in ENGLISH → Reply in ENGLISH\\n- If customer writes in ROMAN URDU → Reply in ROMAN URDU\\n- Always use emojis 😊\\n\\n=== YOUR ONLY JOB ===\\nHelp customers CANCEL their items. Nothing else.\\n\\n=== CRITICAL MESSAGE RULES ===\\nNEVER use these words in your messages:\\n❌ \\\"order\\\", \\\"ordered\\\", \\\"ordering\\\"\\n❌ \\\"modify\\\", \\\"change\\\", \\\"add\\\", \\\"remove\\\"\\n❌ \\\"status\\\", \\\"track\\\", \\\"kahan\\\"\\n❌ DONE, MSAVE\\n❌ Questions that need long answers\\n\\n=== CANCELLATION FLOW (ONLY 3 STEPS!) ===\\n\\nStep 1 - SHOW CANCELLABLE ITEMS:\\n\\nENGLISH:\\n\\\"📋 Cancellable:\\n🆔 ID: [id1]\\n🍔 [items1]\\n💰 Rs. [total1]\\n\\n🆔 ID: [id2]\\n🍔 [items2]\\n💰 Rs. [total2]\\n\\nType the exact ID to cancel:\\\"\\n\\nROMAN URDU:\\n\\\"📋 Cancel ho sakte hain:\\n🆔 ID: [id1]\\n🍔 [items1]\\n💰 Rs. [total1]\\n\\n🆔 ID: [id2]\\n🍔 [items2]\\n💰 Rs. [total2]\\n\\nCancel ke liye exact ID likhein:\\\"\\n\\nStep 2 - AFTER CUSTOMER GIVES ID:\\nGo DIRECTLY to asking for XCANCEL!\\n\\nENGLISH: \\\"❌ To confirm, type: XCANCEL\\\"\\nROMAN URDU: \\\"❌ Confirm ke liye likhein: XCANCEL\\\"\\n\\n⚠️ DO NOT ASK FOR REASON! Skip to XCANCEL confirmation!\\n\\nStep 3 - WHEN CUSTOMER TYPES \\\"XCANCEL\\\":\\nENGLISH: \\\"Done! 😔\\\"\\nROMAN URDU: \\\"Hogaya! 😔\\\"\\n\\nThen add at END:\\n[[CANCEL_ORDER]]\\nOrder_ID: [id]\\nReason: Customer requested\\n[[/CANCEL_ORDER]]\\n\\n=== IF CUSTOMER TYPES WRONG ===\\nENGLISH: \\\"Type exactly: XCANCEL\\\"\\nROMAN URDU: \\\"Exact likhein: XCANCEL\\\"\\n\\n=== IF NO ITEMS ===\\nENGLISH: \\\"Nothing to cancel. 🤔\\\"\\nROMAN URDU: \\\"Kuch nahi hai. 🤔\\\"\\n\\n=== IMPORTANT ===\\n1. DO NOT ASK FOR REASON!\\n2. After ID selection → DIRECTLY ask for XCANCEL\\n3. Keep messages VERY SHORT\\n4. NEVER use: order, modify, change, status, add, remove\",\n    \"context_variable\": \"{{ $json.cancel_context }}\",\n    \"memory_settings\": {\n        \"type\": \"Simple Memory\",\n        \"context_window\": 5\n    },\n    \"output_markers\": {\n        \"cancel_confirmed\": \"[[CANCEL_ORDER]]...[[/CANCEL_ORDER]]\"\n    },\n    \"forbidden_words\": [\n        \"order\",\n        \"ordered\",\n        \"ordering\",\n        \"modify\",\n        \"change\",\n        \"add\",\n        \"remove\",\n        \"status\",\n        \"track\",\n        \"kahan\",\n        \"DONE\",\n        \"MSAVE\",\n        \"yes\",\n        \"ok\",\n        \"haan\"\n    ],\n    \"flow_steps\": [\n        {\n            \"step\": 1,\n            \"action\": \"Show cancellable items with IDs\"\n        },\n        {\n            \"step\": 2,\n            \"action\": \"After ID → DIRECTLY ask for XCANCEL (NO reason question!)\"\n        },\n        {\n            \"step\": 3,\n            \"action\": \"When XCANCEL received → Output marker\"\n        }\n    ],\n    \"example_conversations\": {\n        \"english\": [\n            {\n                \"role\": \"customer\",\n                \"message\": \"I want to cancel\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"📋 Cancellable:\\n🆔 ID: ORD-20251214060029\\n🍔 Zinger x 3\\n💰 Rs. 1500\\n\\nWhich ID?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"ORD-20251214060029\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"❌ Type: XCANCEL\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"XCANCEL\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Done! 😔\\n\\n[[CANCEL_ORDER]]\\nOrder_ID: ORD-20251214060029\\nReason: Customer requested\\n[[/CANCEL_ORDER]]\"\n            }\n        ],\n        \"roman_urdu\": [\n            {\n                \"role\": \"customer\",\n                \"message\": \"Cancel karna hai\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"📋 Cancel ho sakte hain:\\n🆔 ID: ORD-20251214060029\\n🍔 Zinger x 3\\n💰 Rs. 1500\\n\\nKonsa ID?\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"ORD-20251214060029\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"❌ Likhein: XCANCEL\"\n            },\n            {\n                \"role\": \"customer\",\n                \"message\": \"XCANCEL\"\n            },\n            {\n                \"role\": \"bot\",\n                \"message\": \"Hogaya! 😔\\n\\n[[CANCEL_ORDER]]\\nOrder_ID: ORD-20251214060029\\nReason: Customer requested\\n[[/CANCEL_ORDER]]\"\n            }\n        ]\n    }\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        120,
+        0
+      ],
+      "id": "2cde2f81-f8ac-4789-875c-94b4ff2e11e1",
+      "name": "cancel ai agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=cancel_{{ $json.customer_phone.replace('whatsapp:', '').replace('+', '') }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        256,
+        224
+      ],
+      "id": "f6bbc598-5d4e-4c60-8b6f-011c94df314a",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PARSE CANCEL AI OUTPUT - PRODUCTION VERSION\n// =====================================================\n// Place after: Cancel AI Agent\n// Purpose: Parse AI output for cancel confirmation markers\n// =====================================================\n\nconst aiOutput = $json.output || $json.text || '';\n\n// Get previous data - try multiple node names\nlet previousData = {};\ntry {\n    previousData = $('PREPARE CANCEL CONTEXT').first()?.json || {};\n} catch (e) {\n    try {\n        previousData = $('Prepare Cancel Context').first()?.json || {};\n    } catch (e2) {\n        // Fallback to input\n        previousData = {};\n        for (const item of $input.all()) {\n            if (item.json.cancellable_orders || item.json.customer_phone) {\n                previousData = item.json;\n                break;\n            }\n        }\n    }\n}\n\n// Check for markers\nlet cancelConfirmed = false;\nlet cancelRejected = false;\nlet noOrder = false;\nlet orderIdToCancel = null;\nlet orderRowNumber = null;\nlet cancelReason = null;\n\n// Check for [[CANCEL_ORDER]]...[[/CANCEL_ORDER]] marker (from AI output)\nconst cancelOrderMatch = aiOutput.match(/\\[\\[CANCEL_ORDER\\]\\]([\\s\\S]*?)\\[\\[\\/CANCEL_ORDER\\]\\]/i);\nif (cancelOrderMatch) {\n    cancelConfirmed = true;\n    const content = cancelOrderMatch[1];\n\n    const orderIdMatch = content.match(/Order_ID:\\s*(.+)/i);\n    const reasonMatch = content.match(/Reason:\\s*(.+)/i);\n\n    if (orderIdMatch) {\n        orderIdToCancel = orderIdMatch[1].trim();\n    }\n    if (reasonMatch) {\n        cancelReason = reasonMatch[1].trim();\n    }\n}\n\n// Also check [[CANCEL_CONFIRMED:ORDER_ID]] format (alternative)\nconst confirmMatch = aiOutput.match(/\\[\\[CANCEL_CONFIRMED:([^\\]]+)\\]\\]/i);\nif (confirmMatch) {\n    cancelConfirmed = true;\n    orderIdToCancel = confirmMatch[1].trim();\n}\n\n// Check [[CANCEL_REJECTED]]\nif (aiOutput.includes('[[CANCEL_REJECTED]]')) {\n    cancelRejected = true;\n}\n\n// Check [[NO_ORDER]]\nif (aiOutput.includes('[[NO_ORDER]]')) {\n    noOrder = true;\n}\n\n// Find the order row number from cancellable orders\nif (orderIdToCancel && previousData.cancellable_orders) {\n    // Check if it's a number (customer said \"1\" or \"2\")\n    if (/^\\d+$/.test(orderIdToCancel)) {\n        const index = parseInt(orderIdToCancel) - 1;\n        if (previousData.cancellable_orders[index]) {\n            orderRowNumber = previousData.cancellable_orders[index].row_number;\n            orderIdToCancel = previousData.cancellable_orders[index].order_id;\n        }\n    } else {\n        // It's an Order ID - search for it\n        const order = previousData.cancellable_orders.find(o =>\n            o.order_id && o.order_id.toUpperCase() === orderIdToCancel.toUpperCase()\n        );\n        if (order) {\n            orderRowNumber = order.row_number;\n        }\n\n        // Also check ROW- format\n        if (!orderRowNumber && orderIdToCancel.startsWith('ROW-')) {\n            const rowNum = parseInt(orderIdToCancel.replace('ROW-', ''));\n            if (rowNum) {\n                orderRowNumber = rowNum;\n            }\n        }\n\n        // Also check ORD- format\n        if (!orderRowNumber && orderIdToCancel.startsWith('ORD-')) {\n            const order = previousData.cancellable_orders.find(o =>\n                o.order_id && o.order_id.includes(orderIdToCancel)\n            );\n            if (order) {\n                orderRowNumber = order.row_number;\n            }\n        }\n    }\n}\n\n// Get order details for notification\nlet orderDetails = null;\nif (orderIdToCancel && previousData.cancellable_orders) {\n    orderDetails = previousData.cancellable_orders.find(o =>\n        o.order_id && o.order_id.toUpperCase() === orderIdToCancel.toUpperCase()\n    );\n}\n\n// Clean output (remove all markers for customer message)\nlet cleanOutput = aiOutput\n    .replace(/\\[\\[CANCEL_ORDER\\]\\][\\s\\S]*?\\[\\[\\/CANCEL_ORDER\\]\\]/gi, '')\n    .replace(/\\[\\[CANCEL_CONFIRMED:[^\\]]+\\]\\]/gi, '')\n    .replace(/\\[\\[CANCEL_REJECTED\\]\\]/gi, '')\n    .replace(/\\[\\[NO_ORDER\\]\\]/gi, '')\n    .trim();\n\n// Clean phone numbers (remove whatsapp: prefix)\nconst cleanPhone = (phone) => {\n    if (!phone) return '';\n    return phone.replace('whatsapp:', '');\n};\n\nreturn [{\n    json: {\n        // Clean AI output for customer\n        output: cleanOutput,\n\n        // Cancel detection results\n        cancel_confirmed: cancelConfirmed,\n        cancel_rejected: cancelRejected,\n        no_order: noOrder,\n\n        // Order details\n        order_id: orderIdToCancel,\n        order_row_number: orderRowNumber,\n        order_details: orderDetails,\n        cancel_reason: cancelReason,\n\n        // Pass through data (with whatsapp: prefix removed)\n        customer_phone: cleanPhone(previousData.customer_phone),\n        to_number: cleanPhone(previousData.to_number),\n        restaurant_name: previousData.restaurant_name || '',\n        kitchen_email: previousData.kitchen_email || ''\n    }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        104
+      ],
+      "id": "35dc965d-2c95-4249-a08d-8f696725f7ed",
+      "name": "parse cancel ai output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8e3c7570-eab6-44fd-a554-59c1af72a3c3",
+              "leftValue": "={{ $json.cancel_confirmed }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        104
+      ],
+      "id": "04bcdf74-245e-49dc-ba4d-4f35b0c64b1e",
+      "name": "Should Cancel?"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Orders!H{{ $json.order_row_number }}?valueInputOption=USER_ENTERED",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"values\": [\n    [\"Cancelled\"]\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1104,
+        8
+      ],
+      "id": "64b400ae-ed3a-4f6b-97ed-997fb32e3dc7",
+      "name": "Update Order Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=faiqahmedsiddiqui06@gmail.com",
+        "subject": "=⚠️ ORDER CANCELLED - {{ $('parse cancel ai output').first().json.order_id }}",
+        "emailType": "text",
+        "message": "=🚫 ORDER CANCELLED\n\n📋 Order Details:\n🆔 Order ID: {{ $('parse cancel ai output').first().json.order_id }}\n🍔 Items: {{ $('parse cancel ai output').first().json.order_details?.items || 'N/A' }}\n💰 Total: Rs. {{ $('parse cancel ai output').first().json.order_details?.total || 'N/A' }}\n\n👤 Customer Phone: {{ $('parse cancel ai output').first().json.customer_phone }}\n📝 Reason: {{ $('parse cancel ai output').first().json.cancel_reason || 'Customer requested' }}\n\n🕐 Cancelled At: {{ new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1392,
+        8
+      ],
+      "id": "c692207e-f0db-4a7e-9629-b1a47b780e33",
+      "name": "Send a message",
+      "webhookId": "3ce45f8a-9aa5-4cc6-8be6-63f297b1a759",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "7Ke624onD06RrvEF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "={{ $('parse cancel ai output').first().json.to_number }}",
+        "to": "={{ $('parse cancel ai output').first().json.customer_phone }}",
+        "toWhatsapp": true,
+        "message": "=✅ Order Cancel Ho Gaya!  🆔 Order ID: {{ $('parse cancel ai output').first().json.order_id }}  Aap ka order successfully cancel ho gaya hai.   Agar doosra order karna hai to \"menu\" type karein! 🍽️  Thank you! 😊 - {{ $('parse cancel ai output').first().json.restaurant_name }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1616,
+        8
+      ],
+      "id": "a086cab8-2fba-4072-898f-a7c0a9c73e25",
+      "name": "Confirm Cancel to Customer",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "=+14155238886",
+        "to": "={{ $json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        200
+      ],
+      "id": "853b7527-7f17-4284-a934-7a8024ae64cc",
+      "name": "Send Cancel Reply",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $json.sheet_id }}/values/Orders!D{{ $json.order_row_number }}:J{{ $json.order_row_number }}?valueInputOption=USER_ENTERED",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"values\": [\n    [\n      \"{{ $json.modify_data.New_Items }}\",\n      \"{{ $json.modify_data.New_Total }}\",\n      \"{{ $json.modify_data.New_Address }}\",\n      \"{{ $json.modify_data.New_Payment }}\",\n      \"Modified\",\n      \"{{ $now.format('YYYY-MM-DD HH:mm:ss') }}\",\n      \"{{ $json.modify_data.New_Instructions }}\"\n    ]\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1840,
+        664
+      ],
+      "id": "99d254b0-e738-4dc0-bf3a-d9ba2a5fa871",
+      "name": "Update Modified Order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/System_Config!A1:I1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -672,
+        1288
+      ],
+      "id": "570076e3-6db2-433c-9dab-8b608fda3996",
+      "name": "Status - Read Config",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Orders!A:J",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -448,
+        1288
+      ],
+      "id": "f26faf5f-0ffa-450b-a465-5f13c4d4b214",
+      "name": "Find Orders for Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// PREPARE STATUS RESPONSE\n\nconst ordersResponse = $json;\n\n// Get customer data from Switch\nlet customerPhone = '';\nlet toNumber = '';\nlet restaurantName = 'Chaman Hotel';\n\ntry {\n    const switchData = $('Switch1').first()?.json || {};\n    customerPhone = switchData.customer_phone || '';\n    toNumber = switchData.to_number || '';\n} catch(e) {}\n\n// Get restaurant config\ntry {\n    const configData = $('Status - Read Config').first()?.json || {};\n    if (configData.values) {\n        const headers = configData.values[0];\n        const values = configData.values[1];\n        const nameIdx = headers.indexOf('Restaurant_Name');\n        restaurantName = values[nameIdx] || 'Chaman Hotel';\n    }\n} catch(e) {}\n\n// Get today's date\nconst now = new Date();\nconst pakistanTime = new Date(now.toLocaleString(\"en-US\", { timeZone: \"Asia/Karachi\" }));\nconst todayStr = pakistanTime.toISOString().split('T')[0];\n\n// Parse Orders - find ALL orders for this customer (most recent first)\nlet customerOrders = [];\nconst data = Array.isArray(ordersResponse) ? ordersResponse[0] : ordersResponse;\n\nif (data && data.values && data.values.length > 1) {\n    const headers = data.values[0];\n    const rows = data.values.slice(1);\n    \n    const phoneIdx = headers.indexOf('Customer_Phone');\n    const orderIdIdx = headers.indexOf('Order_ID');\n    const statusIdx = headers.indexOf('Status');\n    const itemsIdx = headers.indexOf('Items');\n    const totalIdx = headers.indexOf('Total_Amount');\n    const timeIdx = headers.indexOf('Order_Time');\n    \n    const cleanPhone = customerPhone.replace('whatsapp:', '').replace('+', '').slice(-10);\n    \n    rows.forEach((row, index) => {\n        const rowPhone = (row[phoneIdx] || '').replace('whatsapp:', '').replace('+', '').slice(-10);\n        \n        if (rowPhone === cleanPhone && cleanPhone.length > 0) {\n            customerOrders.push({\n                order_id: row[orderIdIdx] || '',\n                status: row[statusIdx] || '',\n                items: row[itemsIdx] || '',\n                total: row[totalIdx] || '',\n                order_time: row[timeIdx] || ''\n            });\n        }\n    });\n}\n\n// Get the most recent order (last in list)\nconst latestOrder = customerOrders.length > 0 \n    ? customerOrders[customerOrders.length - 1] \n    : null;\n\n// Build response message\nlet message = '';\n\nif (!latestOrder) {\n    message = `Assalam o Alaikum! 👋\n\nAap ka koi order nahi mila hamari system mein. 🤔\n\nAgar order karna chahte hain to \"menu\" type karein! 🍽️\n\n- ${restaurantName}`;\n\n} else {\n    // Status emoji mapping\n    const statusEmoji = {\n        'booked': '📝 Order Received',\n        'processing': '👨‍🍳 Preparing',\n        'preparing': '👨‍🍳 Preparing',\n        'confirmed': '✅ Confirmed',\n        'picked up': '🚴 Rider Picked Up',\n        'picked': '🚴 Rider Picked Up',\n        'on the way': '🚴 On The Way!',\n        'out for delivery': '🚴 On The Way!',\n        'delivered': '✅ Delivered',\n        'cancelled': '❌ Cancelled',\n        'modified': '📝 Modified'\n    };\n    \n    const statusText = statusEmoji[latestOrder.status.toLowerCase()] || `📦 ${latestOrder.status}`;\n    \n    // Estimate message based on status\n    let estimateMsg = '';\n    switch(latestOrder.status.toLowerCase()) {\n        case 'booked':\n        case 'confirmed':\n            estimateMsg = '⏱️ Estimated: 30-45 minutes';\n            break;\n        case 'processing':\n        case 'preparing':\n            estimateMsg = '⏱️ Estimated: 20-30 minutes';\n            break;\n        case 'picked up':\n        case 'picked':\n        case 'on the way':\n        case 'out for delivery':\n            estimateMsg = '⏱️ Almost there! 10-15 minutes';\n            break;\n        case 'delivered':\n            estimateMsg = '✅ Already delivered!';\n            break;\n        case 'cancelled':\n            estimateMsg = '❌ This order was cancelled';\n            break;\n    }\n    \n    message = `📦 Order Status Update\n\n🆔 Order ID: ${latestOrder.order_id}\n📋 Items: ${latestOrder.items}\n💰 Total: Rs. ${latestOrder.total}\n\n${statusText}\n${estimateMsg}\n\nShukriya for ordering from ${restaurantName}! 😊`;\n}\n\nreturn [{\n    json: {\n        customer_phone: customerPhone,\n        to_number: toNumber,\n        restaurant_name: restaurantName,\n        output: message,\n        latest_order: latestOrder,\n        all_orders: customerOrders\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        1288
+      ],
+      "id": "4f42a313-daa5-48f4-bd3a-c1ce178242a1",
+      "name": "PREPARE STATUS RESPONSE"
+    },
+    {
+      "parameters": {
+        "from": "={{ $json.to_number.replace('whatsapp:', '') }}",
+        "to": "={{ $json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        184,
+        1288
+      ],
+      "id": "34032e6e-48ec-4489-acbd-8fecee0d0695",
+      "name": "Send Status Reply (Twilio)",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/values/Orders!A:J",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        184,
+        1096
+      ],
+      "id": "5224040e-da78-4937-866f-91140bedf391",
+      "name": "Get Customer Orders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "NEW_ORDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b78ff22f-2bf5-4e86-969d-b0fc81194eac"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "97944f26-4e74-42a1-a106-739e99fd86a2",
+                    "leftValue": "={{ $json.final_intent }}",
+                    "rightValue": "MODIFY_ORDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1616,
+        624
+      ],
+      "id": "e337b90c-e653-4f53-bf8d-d0b91ddd2ad9",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "sendTo": "faiqahmedsiddiqui06@gmail.com",
+        "subject": "=🔄 Order Modified: {{ $('PARSE AI OUTPUT').first().json.modify_data.Order_ID }}",
+        "emailType": "text",
+        "message": "=Order Modified! ✏️\n\nOrder ID: {{ $('PARSE AI OUTPUT').first().json.modify_data.Order_ID }}\nCustomer: {{ $('PARSE AI OUTPUT').first().json.profile_name }} ({{ $('PARSE AI OUTPUT').first().json.customer_phone }})\n\nUpdated Items: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Items }}\nNew Total: Rs. {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Total }}\nAddress: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Address }}\nPayment: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Payment }}\nInstructions: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Instructions }}\n\n\n\n\n✅ *WHEN ORDER IS READY:*\nGo to form put\nOrder ID: {{ $('PARSE AI OUTPUT').first().json.order_data.Order_ID }}\nSet *Kitchen_Order_Status* column to: *Ready*\n\nhttps://chamanho.app.n8n.cloud/form/873a8e34-e1b0-424d-bb65-0423101ec65c",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2064,
+        664
+      ],
+      "id": "2995f5d1-6ec7-43e9-b558-d68f69a8d16a",
+      "name": "Send a message1",
+      "webhookId": "2cd83a4d-8338-4bab-9f6a-6dfbae124959",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "7Ke624onD06RrvEF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "=+14155238886",
+        "to": "={{ $('PARSE AI OUTPUT').first().json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "=Order Modified! ✏️\n\nOrder ID: {{ $('PARSE AI OUTPUT').first().json.modify_data.Order_ID }}\nCustomer: {{ $('PARSE AI OUTPUT').first().json.profile_name }} ({{ $('PARSE AI OUTPUT').first().json.customer_phone }})\n\nUpdated Items: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Items }}\nNew Total: Rs. {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Total }}\nAddress: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Address }}\nPayment: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Payment }}\nInstructions: {{ $('PARSE AI OUTPUT').first().json.modify_data.New_Instructions }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2288,
+        664
+      ],
+      "id": "abd21637-1838-458e-bb32-467507fe5c0b",
+      "name": "Send modify Reply",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -1400,
+        1296
+      ],
+      "id": "5c3fed1a-b1ed-4d04-b1ca-d945c2c04f81",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "XRjOPeaTdU2KVxrt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        128,
+        224
+      ],
+      "id": "9047c9b5-a7bf-470b-9722-e3e25414b10c",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "XRjOPeaTdU2KVxrt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1048,
+        864
+      ],
+      "id": "b2bcf138-31ad-400a-a82d-06944090de48",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "XRjOPeaTdU2KVxrt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Switch1').item.json.customer_message }}\nCustomer Name: {{ $json.Customer_Name }}\nCustomer Phone: {{ $('Switch1').item.json.customer_phone }}\nTimestamp: {{ $now }}",
+        "options": {
+          "systemMessage": "{\n    \"name\": \"Complaint AI Agent System Prompt\",\n    \"version\": \"5.1\",\n    \"description\": \"Handles complaints with 2 tools: send_whatsapp_message + Complaint Logging Tool\",\n    \"unique_confirmation_keyword\": \"XREPORT\",\n    \"system_prompt\": \"You are a compassionate customer service agent for a restaurant handling COMPLAINTS via WhatsApp.\\n\\n## YOUR 2 TOOLS:\\n1. send_whatsapp_message - Send messages to customer\\n2. Complaint Logging Tool - Log complaint to Google Sheets (MUST CALL when XREPORT received)\\n\\n## CRITICAL RULES:\\n- Call send_whatsapp_message EXACTLY ONCE per response\\n- When customer sends XREPORT, you MUST call Complaint Logging Tool to save the data!\\n- Phone format: ONLY +923095264550 (NEVER add 'whatsapp:' prefix! Just the number with + sign)\\n- Customer_Name is REQUIRED - NEVER leave it empty!\\n- ALL fields must be SEPARATE - do NOT combine them!\\n\\n## FORBIDDEN WORDS (NEVER USE):\\n❌ \\\"order\\\" (except asking about their order details)\\n❌ \\\"cancel\\\", \\\"XCANCEL\\\"\\n❌ \\\"modify\\\", \\\"change\\\", \\\"MSAVE\\\"\\n❌ \\\"status\\\", \\\"track\\\", \\\"DONE\\\"\\n❌ \\\"menu\\\", \\\"price\\\"\\n\\n## 2-MESSAGE FLOW:\\n\\n### MESSAGE 1:\\nCall send_whatsapp_message:\\n- to: +[customer_phone]\\n- message:\\nAssalam o Alaikum! 🙏\\n\\nI'm sorry to hear about your experience. To help you quickly, please share:\\n\\n1️⃣ Receipt ID (or type 'unknown')\\n2️⃣ What items had the issue?\\n3️⃣ Date of purchase\\n4️⃣ Time of purchase\\n5️⃣ Your name\\n6️⃣ Describe what went wrong\\n\\n✅ After ALL details, type: XREPORT\\n\\n### MESSAGE 2 (When customer sends XREPORT):\\n\\n⚠️ IMPORTANT: ALL fields must be SEPARATE!\\n\\nSTEP A - FIRST call Complaint Logging Tool with ALL these fields:\\n- Ticket_ID: TKT-[timestamp like 20251216152517]\\n- Order_ID: [from customer or 'unknown']\\n- Items: [items from customer message]\\n- Date: [date from customer message]\\n- Time: [time from customer message]\\n- Customer_Name: [REQUIRED - extract name from customer's message. CANNOT be empty!]\\n- Phone: [customer phone number]\\n- Complaint: [ONLY the issue description - Example: 'There is a lizard in it']\\n- Severity: [High / Medium / Low - based on severity rules below]\\n- Status: Open\\n\\nSTEP B - THEN call send_whatsapp_message:\\n- to: +[customer_phone]\\n- message:\\n🎫 *COMPLAINT REGISTERED*\\n\\nYour complaint has been logged.\\n\\n📋 *Ticket ID:* TKT-[timestamp]\\n👤 *Name:* [customer name]\\n🍔 *Items:* [items]\\n📅 *Date:* [date]\\n⏰ *Time:* [time]\\n❌ *Issue:* [complaint only]\\n⚠️ *Severity:* [High/Medium/Low]\\n📌 *Status:* Open\\n\\nOur manager will contact you within *30 minutes*.\\n\\nWe apologize for the inconvenience. 🙏\\n\\n## SEVERITY RULES:\\n- High: Safety issues (lizard, insect, mouse, cockroach, glass, poison, allergic, hospital, sick, foreign object)\\n- Medium: Quality issues (cold, wrong item, missing, late, stale, raw)\\n- Low: Minor issues (packaging, portion, attitude, rude)\\n\\n## IF CUSTOMER DOESN'T PROVIDE NAME:\\nAsk: \\\"Please also tell me your name so I can register your complaint.\\\"\\n\\n## IF CUSTOMER TYPES WRONG:\\n\\\"Please type XREPORT after your details to lodge the complaint.\\\"\\n\\n## IMPORTANT:\\n- Complaint = ONLY the issue description\\n- Severity = High / Medium / Low (SEPARATE field!)\\n- Status = Always 'Open' for new complaints\\n- Customer_Name MUST NOT be empty\\n- When XREPORT is received, you MUST call Complaint Logging Tool FIRST\",\n    \"context_variable\": \"{{ $json.complaint_context }}\",\n    \"memory_settings\": {\n        \"type\": \"Simple Memory\",\n        \"context_window\": 5\n    },\n    \"tools_required\": [\n        {\n            \"name\": \"send_whatsapp_message\",\n            \"purpose\": \"Send messages to customer\"\n        },\n        {\n            \"name\": \"Complaint Logging Tool\",\n            \"purpose\": \"Save complaint data to Google Sheets - MUST CALL when XREPORT received\"\n        }\n    ],\n    \"complaint_logging_fields\": [\n        \"Ticket_ID\",\n        \"Order_ID\",\n        \"Items\",\n        \"Date\",\n        \"Time\",\n        \"Customer_Name\",\n        \"Phone\",\n        \"Complaint\",\n        \"Severity\",\n        \"Status\"\n    ],\n    \"severity_options\": [\n        \"High\",\n        \"Medium\",\n        \"Low\"\n    ],\n    \"status_options\": [\n        \"Open\",\n        \"In Progress\",\n        \"Resolved\",\n        \"Closed\"\n    ],\n    \"forbidden_words\": [\n        \"order\",\n        \"cancel\",\n        \"XCANCEL\",\n        \"modify\",\n        \"change\",\n        \"MSAVE\",\n        \"status\",\n        \"track\",\n        \"kahan hai\",\n        \"DONE\",\n        \"menu\",\n        \"price\"\n    ],\n    \"flow_steps\": [\n        {\n            \"step\": 1,\n            \"action\": \"send_whatsapp_message: Ask ALL 6 details + XREPORT\"\n        },\n        {\n            \"step\": 2,\n            \"action\": \"When XREPORT received: (A) Call Complaint Logging Tool with ALL fields (B) Then send_whatsapp_message confirmation\"\n        }\n    ],\n    \"severity_keywords\": {\n        \"High\": [\n            \"lizard\",\n            \"insect\",\n            \"mouse\",\n            \"cockroach\",\n            \"glass\",\n            \"poison\",\n            \"allergic\",\n            \"hospital\",\n            \"sick\",\n            \"foreign object\"\n        ],\n        \"Medium\": [\n            \"cold\",\n            \"wrong item\",\n            \"missing\",\n            \"late\",\n            \"delayed\",\n            \"stale\",\n            \"raw\"\n        ],\n        \"Low\": [\n            \"packaging\",\n            \"small portion\",\n            \"attitude\",\n            \"rude\"\n        ]\n    }\n}"
+        }
+      },
+      "id": "0aec8d8b-fafc-424b-bb93-2b46175335a1",
+      "name": "Complaint Handler Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        120,
+        1480
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Switch1').item.json.customer_phone.replace('whatsapp:', '') }}",
+        "contextWindowLength": 3
+      },
+      "id": "ef8088ec-5bcd-496b-a1e5-9972835491d4",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        128,
+        1704
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Log customer complaints with details: Ticket ID, Customer Name, Phone, Issue Category, Description, Severity (High/Low), Timestamp",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 155599441,
+          "mode": "list",
+          "cachedResultName": "Complaint system",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=155599441"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Complaint_ID\n": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Complaint_ID_', ``, 'string') }}",
+            "Timestamp\n": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Timestamp_', ``, 'string') }}",
+            "Customer_Name\n": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Customer_Name_', ``, 'string') }}",
+            "Customer_Phone": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Customer_Phone', ``, 'string') }}",
+            "Description": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Description', ``, 'string') }}",
+            "Severity\n": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Severity_', ``, 'string') }}",
+            "Manager_Alert_Sent\n": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Manager_Alert_Sent_', ``, 'string') }}",
+            " Status": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('_Status', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "Complaint_ID\n"
+          ],
+          "schema": [
+            {
+              "id": "Complaint_ID\n",
+              "displayName": "Complaint_ID\n",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Timestamp\n",
+              "displayName": "Timestamp\n",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Name\n",
+              "displayName": "Customer_Name\n",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Phone",
+              "displayName": "Customer_Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description",
+              "displayName": "Description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Severity\n",
+              "displayName": "Severity\n",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Manager_Alert_Sent\n",
+              "displayName": "Manager_Alert_Sent\n",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Status",
+              "displayName": " Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8d611bb9-b9eb-4b87-adf4-b60cbbc8efad",
+      "name": "Complaint Logging Tool",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        1704
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Send a WhatsApp message to the customer. ALWAYS provide both parameters:\n- To: The recipient (e.g., +923095264550)\n- Message: The full message text to send (REQUIRED)",
+        "from": "+14155238886",
+        "to": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('To', ``, 'string') }}",
+        "toWhatsapp": true,
+        "message": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Message', `The complete message text to send. REQUIRED - cannot be empty.`, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilioTool",
+      "typeVersion": 1,
+      "position": [
+        384,
+        1704
+      ],
+      "id": "84a483ba-845d-4b7d-98d1-889f06651100",
+      "name": "send_whatsapp_message",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1124864165,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1124864165"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Customer_Phone",
+              "lookupValue": "={{ $json.customer_phone.replace('whatsapp:', '').replace('+', '') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -672,
+        1804
+      ],
+      "id": "191e0d79-9f67-4b3e-8296-c9cae7f79c02",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        1804
+      ],
+      "id": "c25a993d-eb84-49bf-9d1a-59ee5264f3ff",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Switch1').item.json.customer_phone.replace('whatsapp:', '') }}",
+        "toWhatsapp": true,
+        "message": "Assalam o Alaikum! 🙏  We couldn't find any orders associated with your phone number in our system.  If you believe this is a mistake, please contact us directly.  Thank you!",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        184,
+        1880
+      ],
+      "id": "52b59e7b-b3ed-4f96-a95f-4e8dac0289b7",
+      "name": "Send an SMS/MMS/WhatsApp message",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ba620391-2f47-4896-bc15-dea480b8d5b7",
+              "leftValue": "={{ $json.raw_output }}",
+              "rightValue": "High",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        1584
+      ],
+      "id": "3e2a8858-f7a4-47f3-92ce-a0b4c1765793",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI Agent complaint output\nconst output = $json.output || '';\n\n// Extract data between markers\nconst match = output.match(/\\[\\[COMPLAINT_DATA\\]\\]([\\s\\S]*?)\\[\\[END_COMPLAINT_DATA\\]\\]/);\n\nif (!match) {\n    return [{\n        json: {\n            parsed: false,\n            raw_output: output\n        }\n    }];\n}\n\nconst dataText = match[1];\n\n// Parse each field\nfunction extractField(text, fieldName) {\n    const regex = new RegExp(`${fieldName}:\\\\s*(.+?)(?:\\\\n|$)`, 'i');\n    const match = text.match(regex);\n    return match ? match[1].trim() : null;\n}\n\nconst parsedData = {\n    Ticket_ID: extractField(dataText, 'Ticket_ID'),\n    Order_ID: extractField(dataText, 'Order_ID'),\n    Items_Ordered: extractField(dataText, 'Items_Ordered'),\n    Order_Date: extractField(dataText, 'Order_Date'),\n    Order_Time: extractField(dataText, 'Order_Time'),\n    Customer_Name: extractField(dataText, 'Customer_Name'),\n    Phone_Number: extractField(dataText, 'Phone_Number'),\n    Complaint: extractField(dataText, 'Complaint'),\n    Severity: extractField(dataText, 'Severity'),\n    parsed: true\n};\n\nreturn [{\n    json: parsedData\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        1584
+      ],
+      "id": "9c0c86b1-e485-4c24-b7b7-86ff391efeb4",
+      "name": "parse AI output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33ed1a08-94bb-4c0e-9c1c-401cb69484c8",
+              "leftValue": "={{ $json.Order_ID }}",
+              "rightValue": "is not empty",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        1804
+      ],
+      "id": "4f9046b5-8625-474f-a341-0d488514750c",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        1704
+      ],
+      "id": "ea6cf1d5-c09a-45c8-8e58-ab8f2cc2a614",
+      "name": "OpenAI Chat Model3",
+      "credentials": {
+        "openAiApi": {
+          "id": "XRjOPeaTdU2KVxrt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -2144,
+        976
+      ],
+      "id": "319f75a1-8c35-4a85-b514-42457110f1b2",
+      "name": "Transcribe a recording1",
+      "credentials": {
+        "openAiApi": {
+          "id": "XRjOPeaTdU2KVxrt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        592,
+        608
+      ],
+      "id": "56bb44ef-2852-404d-9c57-b7e12182c204",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "sendTo": "faiqahmedsiddiqui06@gmail.com",
+        "subject": " Complaint Received",
+        "emailType": "text",
+        "message": "={{ $json.raw_output }}  --- Customer Phone: {{ $json.customer_phone }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        1584
+      ],
+      "id": "8ab856df-1670-4c8b-a8b3-a52d3dea61d2",
+      "name": "Send a message2",
+      "webhookId": "22482ffa-83cc-4cbd-93d2-d1743dc277a0",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "7Ke624onD06RrvEF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1149676911,
+          "mode": "list",
+          "cachedResultName": "Rider Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1149676911"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Rider_ID": "={{ $('Match Order Id1').item.json.Rider_ID }}",
+            "Status": "Available",
+            "Current_Order_ID": "="
+          },
+          "matchingColumns": [
+            "Rider_ID"
+          ],
+          "schema": [
+            {
+              "id": "Rider_ID",
+              "displayName": "Rider_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Rider_Name",
+              "displayName": "Rider_Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Rider_Contact",
+              "displayName": "Rider_Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current_Order_ID",
+              "displayName": "Current_Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1e0c5fe4-f176-4e50-9e97-7a5dfae715e5",
+      "name": "Update Rider Status to Available",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1696,
+        2488
+      ],
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "notesInFlow": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "CustomersFeedbackform",
+              "value": "https://docs.google.com/forms/d/e/1FAIpQLSdjRRKy8ZeSoU4ktk7eSdaLPFyrdfbKuZoC9tLCDiqKG41x2A/viewform?usp=header",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "80aea6d9-b848-4d96-9315-e47c5287a30f",
+      "name": "Workflow Configuration1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2144,
+        2488
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1124864165,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1124864165"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order_ID": "={{ $json.Order_ID }}",
+            "Kitchen Order Status": "Delivered"
+          },
+          "matchingColumns": [
+            "Order_ID"
+          ],
+          "schema": [
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Customer_Name",
+              "displayName": "Customer_Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Customer_Phone",
+              "displayName": "Customer_Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Items",
+              "displayName": "Items",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Total_Amount",
+              "displayName": "Total_Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Delivery_Address",
+              "displayName": "Delivery_Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Payment_Method",
+              "displayName": "Payment_Method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order_Time",
+              "displayName": "Order_Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Special_Instructions",
+              "displayName": "Special_Instructions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Kitchen Order Status",
+              "displayName": "Kitchen Order Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Rider_ID",
+              "displayName": "Rider_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e33d48d9-2f80-483a-a44f-e358034841c6",
+      "name": "Update Order Sheet - Delivered",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2368,
+        2488
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('On form submission1').item.json['Kitchen Order Status'] }}",
+                    "rightValue": "Ready",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "47100f7e-9c92-4857-a27a-9ae576404535"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ready"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('On form submission1').item.json['Kitchen Order Status'] }}",
+                    "rightValue": "Delivered",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "1e8e651a-579f-4fa7-8564-f907ea1011fd"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Delivered"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aa210edd-b07b-47be-9137-e1c626481e0b",
+      "name": "Route by Kitchen Order Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -2816,
+        2296
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1124864165,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1124864165"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Order_ID",
+              "lookupValue": "={{ $json.Order_ID }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2592,
+        2200
+      ],
+      "id": "cb192dbf-f9be-45e5-a598-154fb9410e95",
+      "name": "Match Order Id",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1124864165,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1124864165"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Order_ID",
+              "lookupValue": "={{ $json.Order_ID }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2592,
+        2488
+      ],
+      "id": "d908c2e9-6590-488c-847a-78c98c7af0c5",
+      "name": "Match Order Id1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1149676911,
+          "mode": "list",
+          "cachedResultName": "Rider Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1149676911"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Available"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": false
+        }
+      },
+      "id": "7cacf228-1ef4-4d50-b936-ca713baaaec0",
+      "name": "Find Available Rider1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2368,
+        2200
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "notesInFlow": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1149676911,
+          "mode": "list",
+          "cachedResultName": "Rider Sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1149676911"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Rider_ID": "={{ $('Find Available Rider1').item.json.Rider_ID }}",
+            "Status": "Assigned",
+            "Current_Order_ID": "={{ $('Match Order Id').item.json.Order_ID }}"
+          },
+          "matchingColumns": [
+            "Rider_ID"
+          ],
+          "schema": [
+            {
+              "id": "Rider_ID",
+              "displayName": "Rider_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Rider_Name",
+              "displayName": "Rider_Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Rider_Contact",
+              "displayName": "Rider_Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current_Order_ID",
+              "displayName": "Current_Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "fb693ed8-b0e4-45d7-9bdb-cbe8780c592e",
+      "name": "Update Rider Sheet - Assign Rider1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1696,
+        2296
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0",
+          "mode": "list",
+          "cachedResultName": "Restaurant Management System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1124864165,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IeqF4oK2_0PtjLuytZ93lIYP41jMe6ku5grXl96jtV0/edit#gid=1124864165"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order_ID": "={{ $json.Current_Order_ID }}",
+            "Rider_ID": "={{ $json.Rider_ID }}",
+            "Kitchen Order Status": "In Transit"
+          },
+          "matchingColumns": [
+            "Order_ID"
+          ],
+          "schema": [
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Customer_Name",
+              "displayName": "Customer_Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Customer_Phone",
+              "displayName": "Customer_Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Items",
+              "displayName": "Items",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Total_Amount",
+              "displayName": "Total_Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Delivery_Address",
+              "displayName": "Delivery_Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Payment_Method",
+              "displayName": "Payment_Method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order_Time",
+              "displayName": "Order_Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Special_Instructions",
+              "displayName": "Special_Instructions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Kitchen Order Status",
+              "displayName": "Kitchen Order Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Rider_ID",
+              "displayName": "Rider_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7ea4426b-e31e-4f45-8d72-9c34416cd815",
+      "name": "Update Order Sheet - In Transit1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1472,
+        2296
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tnqOEhlXbYyS5OSm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "781845091684375",
+        "recipientPhoneNumber": "+92 301 0055035",
+        "textBody": "=⚠️ ALERT: No Available Rider  Order ID: {{ $('If').item.json.Order_ID }} Customer:{{ $('If').item.json.Customer_Name }}  Customer_Phone:{{ $('If').item.json.Customer_Phone }} Address: {{ $('If').item.json.Delivery_Address }}  Please assign a rider manually.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        -1696,
+        2104
+      ],
+      "id": "af660440-4b0d-426c-984b-06569e576d01",
+      "name": "Alert Manager - No Rider Available1",
+      "webhookId": "f82f601c-8f33-45ab-a28b-e0f6aaf4cac2",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "P8BDOT2iuXLiakrz",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Filter out empty rows\nconst validRows = items.filter(item => Object.keys(item.json).length > 0);\n\nreturn [\n  {\n    json: {\n      available_count: validRows.length\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2144,
+        2200
+      ],
+      "id": "1945a0d6-a0eb-45a8-bc06-9c34ee63aba7",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "formTitle": "Kitchen Order Status Update",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Order_ID",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Kitchen Order Status"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -3040,
+        2296
+      ],
+      "id": "994e52e1-dd1c-4c1e-8359-33df333245de",
+      "name": "On form submission1",
+      "webhookId": "873a8e34-e1b0-424d-bb65-0423101ec65c"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.available_count }}\n",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "id": "ceb63c1f-0a44-44ab-be5f-3eac891cef83",
+      "name": "Rider Available",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1920,
+        2200
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ String($('Find Available Rider1').item.json.Rider_Contact) }}",
+        "toWhatsapp": true,
+        "message": "=New delivery assignment!  Customer Name: {{ $('Match Order Id').item.json.Customer_Name }} Address: {{ $('Match Order Id').item.json.Delivery_Address }} Contact: {{ $('Match Order Id').item.json.Customer_Phone }} Payment Method:{{ $('Match Order Id').item.json.Payment_Method }}  Please proceed to pick up the order.\n\nwhen delivered update the Kitchen Order Status with respective order id in the below form:\n\nhttps://chamanho.app.n8n.cloud/form/873a8e34-e1b0-424d-bb65-0423101ec65c\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1248,
+        2296
+      ],
+      "id": "d0a91f76-6270-48e4-a424-75e95ec09411",
+      "name": "Send WhatsApp to Rider",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "19586cbf-2306-4923-a1fe-6492133f9e2b",
+              "leftValue": "={{ $json['Kitchen Order Status'] }}",
+              "rightValue": "Delivered",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1920,
+        2488
+      ],
+      "id": "0ae36dec-ebab-4aea-b08a-d14e74b15619",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ String($('Match Order Id1').item.json.Customer_Phone) }}",
+        "toWhatsapp": true,
+        "message": "=Thank you for choosing us! Your order has been delivered. Please share your feedback here: {{ $('Workflow Configuration1').item.json.CustomersFeedbackform }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1472,
+        2488
+      ],
+      "id": "acbf4cb5-bf07-42b3-833f-21c7c64b5264",
+      "name": "Send an SMS/MMS/WhatsApp message2",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ String($('Match Order Id').item.json.Customer_Phone) }}",
+        "toWhatsapp": true,
+        "message": "=Your order is with the rider! 🚴  Rider Name:{{ $('Find Available Rider1').item.json.Rider_Name }} Contact:{{ $('Find Available Rider1').item.json.Rider_Contact }} Estimated delivery time: 45 mins.  Thank you for your order!",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        2296
+      ],
+      "id": "4c8fa8f7-052c-473f-8c02-340f03701bec",
+      "name": "Send an SMS/MMS/WhatsApp message3",
+      "credentials": {
+        "twilioApi": {
+          "id": "O9TdpUTJNHvtongN",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "\n\n\n\n\n\n\n\n\n\n\n\n\n## 🔴 COMPLAINT\nDetails → **XREPORT** → Severity → Logged ✅\n\n🔴 High = Alert | 🟡 Medium | 🟢 Low\n**Ticket:** TKT-timestamp",
+        "height": 736,
+        "width": 2688,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1080,
+        1304
+      ],
+      "typeVersion": 1,
+      "id": "be305647-59f7-46ff-b0a0-5208c85db323",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## 📍 STATUS\nPhone → Find Order → Show Status ✅\n\n📝 Booked | ✅ Ready | 🛵 Transit | 🎉 Delivered | ❌ Cancelled",
+        "height": 208,
+        "width": 1728
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1060,
+        1240
+      ],
+      "typeVersion": 1,
+      "id": "447281ac-a898-4b71-a248-13ed12c06bf9",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## ❌ CANCEL PATH\n\n**Trigger:** Customer says \"cancel\", \"cancel karo\"\n\n**Flow:**\n1. Show cancellable orders (status = Booked)\n2. Customer selects Order ID\n3. Confirm with: **XCANCEL**\n4. Update status → \"Cancelled\"\n\n**Output:** `[[CANCEL_ORDER]]` marker",
+        "height": 720,
+        "width": 2896
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -928,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "659a946a-5e9c-4227-8a55-72f7fef5f51c",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## 🟢 ORDER                                                                  \nShow Order → Changes → **MODIFY OK** → Updated ✅\n**Output:** `[[MODIFY_ORDER]]`       \n\n## 🔵 MODIFY\nShow Order → Changes → **MODIFY OK** → Updated ✅\n**Output:** `[[MODIFY_ORDER]]`                                                      \n   \n       \n\n\n\n\n\n",
+        "height": 928,
+        "width": 3696,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1216,
+        368
+      ],
+      "typeVersion": 1,
+      "id": "93aaff4c-c61c-4961-8469-e07eab631bcf",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## 🛵 RIDER\nReady → Find Rider → Assign → Notify Both ✅\n\n📱 Rider: Address + Payment\n📱 Customer: Rider + ETA\n\n⚠️ No rider = Manager Alert",
+        "height": 544,
+        "width": 1920
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2720,
+        1912
+      ],
+      "typeVersion": 1,
+      "id": "51ff25ec-ca80-4ca4-bd1f-1e95b9668baa",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## ⭐ FEEDBACK\nDelivered → Free Rider → Request Feedback → Log ✅\n\n📱 \"Thank you! Rate us: ⭐⭐⭐⭐⭐\"\n📊 Logs: Rating + Comments",
+        "height": 320,
+        "width": 1984
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3056,
+        2448
+      ],
+      "typeVersion": 1,
+      "id": "05c27afe-23d4-4589-93f1-a33f4d026f7c",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## 📥 MESSAGE INPUT\n\nText/Voice → Merge → Intent → Switch\n\n🎤 Voice = Whisper STT\n🔀 6 Routes: ORDER/MODIFY/CANCEL/STATUS/COMPLAINT/CHAT",
+        "height": 672,
+        "width": 2656
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3248,
+        768
+      ],
+      "typeVersion": 1,
+      "id": "1adaf79b-3f69-4676-bbb0-413c50241947",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {
+    "On form submission1": [
+      {
+        "json": {
+          "Order_ID": "ORD-20251214141148",
+          "Kitchen Order Status": "Delivered",
+          "submittedAt": "2025-12-17T22:06:09.160+05:00",
+          "formMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Check if Voice Note": {
+      "main": [
+        [
+          {
+            "node": "Download Voice Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "extract structured data from text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice Note": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify to kitchen": {
+      "main": [
+        [
+          {
+            "node": "Notify Customer (Confirmation)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "deduplication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "deduplication": {
+      "main": [
+        [
+          {
+            "node": "Check if Voice Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract structured data from voice note": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract structured data from text": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "parse llm intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse llm intent": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancel - Read Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status - Read Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Shop Status Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Menu",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Inventory",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Customer Orders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send an SMS/MMS/WhatsApp message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Menu": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Shop Status Check": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Inventory": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Prepare AI Context": {
+      "main": [
+        [
+          {
+            "node": "Full AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Full AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Full AI Agent": {
+      "main": [
+        [
+          {
+            "node": "PARSE AI OUTPUT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PARSE AI OUTPUT": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Order": {
+      "main": [
+        [
+          {
+            "node": "Notify to kitchen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Customer Orders": {
+      "main": [
+        [
+          {
+            "node": "PREPARE CANCEL CONTEXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel - Read Config": {
+      "main": [
+        [
+          {
+            "node": "Find Customer Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PREPARE CANCEL CONTEXT": {
+      "main": [
+        [
+          {
+            "node": "cancel ai agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "cancel ai agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancel ai agent": {
+      "main": [
+        [
+          {
+            "node": "parse cancel ai output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse cancel ai output": {
+      "main": [
+        [
+          {
+            "node": "Should Cancel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Cancel?": {
+      "main": [
+        [
+          {
+            "node": "Update Order Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Cancel Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order Status": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Confirm Cancel to Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Modified Order": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status - Read Config": {
+      "main": [
+        [
+          {
+            "node": "Find Orders for Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Orders for Status": {
+      "main": [
+        [
+          {
+            "node": "PREPARE STATUS RESPONSE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PREPARE STATUS RESPONSE": {
+      "main": [
+        [
+          {
+            "node": "Send Status Reply (Twilio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customer Orders": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Log Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Modified Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Simple Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        [
+          {
+            "node": "Send modify Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "cancel ai agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Full AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Complaint Handler Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complaint Logging Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Complaint Handler Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complaint Handler Agent": {
+      "main": [
+        [
+          {
+            "node": "parse AI output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_whatsapp_message": {
+      "ai_tool": [
+        [
+          {
+            "node": "Complaint Handler Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse AI output": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Complaint Handler Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send an SMS/MMS/WhatsApp message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Complaint Handler Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording1": {
+      "main": [
+        [
+          {
+            "node": "extract structured data from voice note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Rider Status to Available": {
+      "main": [
+        [
+          {
+            "node": "Send an SMS/MMS/WhatsApp message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Configuration1": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order Sheet - Delivered": {
+      "main": [
+        [
+          {
+            "node": "Workflow Configuration1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Kitchen Order Status": {
+      "main": [
+        [
+          {
+            "node": "Match Order Id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Match Order Id1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Order Id": {
+      "main": [
+        [
+          {
+            "node": "Find Available Rider1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Order Id1": {
+      "main": [
+        [
+          {
+            "node": "Update Order Sheet - Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Available Rider1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Rider Sheet - Assign Rider1": {
+      "main": [
+        [
+          {
+            "node": "Update Order Sheet - In Transit1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order Sheet - In Transit1": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp to Rider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Rider Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission1": {
+      "main": [
+        [
+          {
+            "node": "Route by Kitchen Order Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rider Available": {
+      "main": [
+        [
+          {
+            "node": "Alert Manager - No Rider Available1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Rider Sheet - Assign Rider1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp to Rider": {
+      "main": [
+        [
+          {
+            "node": "Send an SMS/MMS/WhatsApp message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Update Rider Status to Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c68d26cd-bc68-4270-8516-180c8bd750d9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e8bbd5a9f4fca76f4237fa5c7210c49df54426a7cb505ea01eb67f02a66974cd"
+  },
+  "id": "Jjfsra1CYq4e5sMG",
+  "tags": []
+}
