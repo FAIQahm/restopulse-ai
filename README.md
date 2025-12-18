@@ -4,6 +4,10 @@ For whatsapp:
 
 ![Combined WhatsApp Workflow](./combined-for-whatsapp.png)
 
+For website:
+
+![Combined Website Workflow](./combined-website-workflow.png)
+
 ## Technology Document
 
 
