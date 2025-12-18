@@ -83,6 +83,12 @@ The system supports **multiple input channels**, making it versatile for any res
 - Unified order management in Google Sheets
 - No code changes required for different restaurants
 
+### 🌐 Live Demo
+
+**Demo Website:** [https://chaman.bolt.host/](https://chaman.bolt.host/)
+
+This demo showcases how the AI chatbot integrates with a restaurant website for real-time ordering.
+
 ---
 
 ## 2. Complete Project Workflow Architecture
