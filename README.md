@@ -1,7 +1,12 @@
 # AI-Powered Restaurant Order Automation Agent
+
+For whatsapp:
+
+![Combined WhatsApp Workflow](./combined-for-whatsapp.png)
+
 ## Technology Document
 
----
+
 
 ## 1. Project Scope & Deliverables (The "What")
 
