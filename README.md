@@ -2,7 +2,7 @@
 
 For whatsapp:
 
-![Combined WhatsApp Workflow](./combined-for-whatsapp.png)
+![Combined WhatsApp Workflow](./combined-for-whatsapp)
 
 For website:
 
